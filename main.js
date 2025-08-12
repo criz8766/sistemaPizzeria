@@ -20,7 +20,7 @@ ipcMain.handle('get-products', async () => {
       runQuery('SELECT * FROM otros_productos ORDER BY categoria, nombre')
     ]);
     return { pizzas: products[0], churrascos: products[1], agregados: products[2], otros: products[3] };
-  } catch (error) { console.error(error); return {}; } 
+  } catch (error) { console.error(error); return {}; }
   finally { db.close(); }
 });
 
@@ -36,17 +36,17 @@ ipcMain.handle('generate-ticket', async (event, orderData) => {
   doc.moveDown(0.5);
   doc.font('Helvetica').fontSize(10);
   doc.text(`Pedido para: ${orderData.customer.name}`, { align: 'center' });
-  
+
   const orderDate = new Date(orderData.timestamp);
   const datePart = orderDate.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const timePart = orderDate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false });
   const formattedDateTime = `${datePart}, ${timePart}`;
   doc.text(formattedDateTime, { align: 'center' });
-  
+
   // NUEVO: Añadimos el tipo de pedido (Servir o Llevar)
   const tipoPedido = orderData.orderType.charAt(0).toUpperCase() + orderData.orderType.slice(1);
   doc.text(`¿servir o llevar?: ${tipoPedido}`, { align: 'center' });
-  
+
   doc.moveDown(0.5);
 
   if (orderData.delivery.type === 'demora' && orderData.delivery.time) {
@@ -58,7 +58,7 @@ ipcMain.handle('generate-ticket', async (event, orderData) => {
 
   doc.moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).dash(2, { space: 3 }).stroke().undash();
   doc.moveDown(0.5);
-  
+
   orderData.items.forEach(item => {
     const yPosition = doc.y;
     const itemTextWidth = 140;
@@ -68,7 +68,7 @@ ipcMain.handle('generate-ticket', async (event, orderData) => {
 
     doc.font('Helvetica-Bold').fontSize(12)
        .text(`$${item.price.toLocaleString('es-CL')}`, doc.page.margins.left, yPosition, { align: 'right' });
-    
+
     const nameHeight = doc.heightOfString(`${item.name}`, { width: itemTextWidth });
     doc.y = yPosition + nameHeight;
 
@@ -80,7 +80,7 @@ ipcMain.handle('generate-ticket', async (event, orderData) => {
       doc.font('Helvetica').fontSize(12).fillColor('black')
          .text(`  -> Nota: ${item.notes}`, { width: doc.page.width - doc.page.margins.left - doc.page.margins.right });
     }
-    
+
     doc.moveDown(0.8);
   });
 
@@ -98,7 +98,7 @@ ipcMain.handle('generate-ticket', async (event, orderData) => {
 ipcMain.handle('confirm-print', async (event, {filePath, orderData}) => {
   const db = new sqlite3.Database('./piamonte.db', (err) => { if (err) console.error(err.message); });
   const itemsJson = JSON.stringify(orderData.items);
-  
+
   if (orderData.id) {
     const sql = `UPDATE pedidos SET cliente_nombre = ?, cliente_telefono = ?, tipo_pedido = ?, total = ?, items_json = ?, fecha = ?, tipo_entrega = ?, hora_entrega = ?, forma_pago = ?, estado_pago = ? WHERE id = ?`;
     db.run(sql, [orderData.customer.name, orderData.customer.phone, orderData.orderType, orderData.total, itemsJson, orderData.timestamp, orderData.delivery.type, orderData.delivery.time, orderData.payment.method, orderData.payment.status, orderData.id], function(err) { /* ... */ });
@@ -106,11 +106,11 @@ ipcMain.handle('confirm-print', async (event, {filePath, orderData}) => {
     const sql = `INSERT INTO pedidos (cliente_nombre, cliente_telefono, tipo_pedido, total, items_json, fecha, tipo_entrega, hora_entrega, forma_pago, estado_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
     db.run(sql, [orderData.customer.name, orderData.customer.phone, orderData.orderType, orderData.total, itemsJson, orderData.timestamp, orderData.delivery.type, orderData.delivery.time, orderData.payment.method, orderData.payment.status], function(err) { /* ... */ });
   }
-  
+
   try {
     await print(filePath, { printer: 'XP-80C', timeout: 5000 });
     return { success: true };
-  } catch (error) { console.error("Error de impresión:", error); return { success: false, error: error.message }; } 
+  } catch (error) { console.error("Error de impresión:", error); return { success: false, error: error.message }; }
   finally { fs.unlinkSync(filePath); }
 });
 
@@ -146,8 +146,8 @@ ipcMain.handle('generate-report', async () => {
   orders.forEach(order => {
     const items = JSON.parse(order.items_json);
     items.forEach(item => {
-      const agregadosStr = item.extras && item.extras.length > 0 
-        ? item.extras.map(e => e.nombre).join(', ') 
+      const agregadosStr = item.extras && item.extras.length > 0
+        ? item.extras.map(e => e.nombre).join(', ')
         : '';
 
       reportData.push({
@@ -170,7 +170,7 @@ ipcMain.handle('generate-report', async () => {
   reportData.push({});
   const totalRow = { 'Notas': 'TOTAL VENTAS', 'Precio Item': totalVentas };
   reportData.push(totalRow);
-  
+
   const workbook = xlsx.utils.book_new();
   const worksheet = xlsx.utils.json_to_sheet(reportData);
 
@@ -268,6 +268,8 @@ const createWindow = () => {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
+    frame: false, // <-- IMPORTANTE: Ventana sin marco
+    autoHideMenuBar: true // <-- IMPORTANTE: Oculta la barra de menú
   });
 
   // AÑADIMOS ESTO PARA FORZAR LA LIMPIEZA DE CACHÉ AL INICIAR
@@ -277,6 +279,34 @@ const createWindow = () => {
       mainWindow.loadFile('index.html');
   });
 };
+
+// Lógica de los botones de la ventana
+ipcMain.on('minimize-window', () => {
+    const window = BrowserWindow.getFocusedWindow();
+    if (window) {
+        window.minimize();
+    }
+});
+
+ipcMain.on('maximize-window', () => {
+    const window = BrowserWindow.getFocusedWindow();
+    if (window) {
+        if (window.isMaximized()) {
+            window.unmaximize();
+        } else {
+            window.maximize();
+        }
+    }
+});
+
+ipcMain.on('close-window', () => {
+    const window = BrowserWindow.getFocusedWindow();
+    if (window) {
+        window.close();
+    }
+});
+
+
 // Lógica del ciclo de vida de la aplicación
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => {

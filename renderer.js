@@ -235,7 +235,7 @@ finalizeOrderBtn.addEventListener('click', async () => {
   fullOrder = { id: editingOrderId, customer: { name: customerName, phone: document.getElementById('customer-phone').value.trim() }, orderType: document.querySelector('input[name="order-type"]:checked').value, total: currentOrder.reduce((sum, item) => sum + item.price, 0), items: currentOrder, timestamp: new Date().toISOString(), delivery: { type: deliveryType, time: deliveryTime }, payment: { status: paymentStatus, method: paymentMethod } };
   try {
     const filePath = await window.api.generateTicket(fullOrder);
-    if (filePath) { showPrintPreview(filePath); } 
+    if (filePath) { showPrintPreview(filePath); }
     else { showAlert("Hubo un error al generar el ticket."); }
   } catch (error) {
     console.error("Error generando ticket:", error);
@@ -279,7 +279,7 @@ historyListEl.addEventListener('click', async (e) => {
         if (orderToReprint) {
             fullOrder = { id: orderToReprint.id, customer: { name: orderToReprint.cliente_nombre, phone: orderToReprint.cliente_telefono }, orderType: orderToReprint.tipo_pedido, total: orderToReprint.total, items: JSON.parse(orderToReprint.items_json), timestamp: orderToReprint.fecha, delivery: { type: orderToReprint.tipo_entrega, time: orderToReprint.hora_entrega }, payment: { status: orderToReprint.estado_pago, method: orderToReprint.forma_pago } };
             const filePath = await window.api.generateTicket(fullOrder);
-            if (filePath) { showPrintPreview(filePath); } 
+            if (filePath) { showPrintPreview(filePath); }
             else { showAlert("Hubo un error al generar el ticket de reimpresión."); }
         }
     }
@@ -314,8 +314,8 @@ document.querySelectorAll('.tab-button').forEach(tab => {
       }
     });
 
-    if(tab.dataset.target === 'history-tab-content') { 
-      loadOrderHistory(); 
+    if(tab.dataset.target === 'history-tab-content') {
+      loadOrderHistory();
     }
   });
 });
@@ -348,7 +348,7 @@ document.getElementById('payment-confirm-btn').addEventListener('click', async (
         paymentMethod = otherPayment;
     }
     const success = await window.api.updatePaymentStatus({ orderId: payingOrderId, status: 'Pagado', paymentMethod: paymentMethod });
-    if (success) { loadOrderHistory(); } 
+    if (success) { loadOrderHistory(); }
     else { showAlert('Hubo un error al actualizar el estado de pago.'); }
     confirmPaymentModal.classList.add('hidden');
     payingOrderId = null;
@@ -420,5 +420,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }).catch(error => {
     console.error("Error al llamar a getProducts:", error);
     showAlert("Error crítico al cargar productos. Revise la consola.");
+  });
+
+  // --> LÓGICA PARA LOS BOTONES DE LA VENTANA <--
+  document.getElementById('minimize-btn').addEventListener('click', () => {
+    window.api.minimizeWindow();
+  });
+  
+  document.getElementById('maximize-btn').addEventListener('click', () => {
+    window.api.maximizeWindow();
+  });
+
+  document.getElementById('close-btn').addEventListener('click', () => {
+    window.api.closeWindow();
   });
 });
