@@ -32,8 +32,17 @@ const paymentMethodSelect = document.getElementById('payment-method');
 const otherPaymentWrapper = document.getElementById('other-payment-wrapper');
 const searchInput = document.getElementById('search-products');
 const searchExtrasInput = document.getElementById('search-extras');
+// NUEVO: Elementos del modal de alerta
+const alertModal = document.getElementById('alert-modal');
+const alertModalMessage = document.getElementById('alert-modal-message');
+const alertModalCloseBtn = document.getElementById('alert-modal-close-btn');
 
-
+// --- LÓGICA DE ALERTAS ---
+function showAlert(message) {
+    alertModalMessage.textContent = message;
+    alertModal.classList.remove('hidden');
+    alertModalCloseBtn.focus(); // Poner foco en el botón para poder cerrar con Enter
+}
 
 // --- LÓGICA DE VISTA PREVIA ---
 function showPrintPreview(filePath) {
@@ -201,20 +210,25 @@ function openNotesModal(item) {
 }
 
 // --- EVENT LISTENERS ---
+// NUEVO: Event listener para el botón de cerrar del modal de alerta
+alertModalCloseBtn.addEventListener('click', () => {
+    alertModal.classList.add('hidden');
+});
+
 finalizeOrderBtn.addEventListener('click', async () => {
   const customerName = document.getElementById('customer-name').value.trim();
-  if (currentOrder.length === 0) { alert('No se puede finalizar un pedido vacío.'); return; }
-  if (!customerName) { alert('Por favor, ingrese el nombre del cliente.'); return; }
+  if (currentOrder.length === 0) { showAlert('No se puede finalizar un pedido vacío.'); return; }
+  if (!customerName) { showAlert('Por favor, ingrese el nombre del cliente.'); return; }
   const deliveryType = document.querySelector('input[name="delivery-type"]:checked').value;
   let deliveryTime;
-  if (deliveryType === 'demora') { const minutes = parseInt(document.getElementById('delay-minutes').value) || 0; const deliveryDate = new Date(Date.now() + minutes * 60000); deliveryTime = deliveryDate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false }); } else { deliveryTime = document.getElementById('scheduled-time').value; if(!deliveryTime) { alert('Por favor, especifique una hora de entrega.'); return; } }
+  if (deliveryType === 'demora') { const minutes = parseInt(document.getElementById('delay-minutes').value) || 0; const deliveryDate = new Date(Date.now() + minutes * 60000); deliveryTime = deliveryDate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false }); } else { deliveryTime = document.getElementById('scheduled-time').value; if(!deliveryTime) { showAlert('Por favor, especifique una hora de entrega.'); return; } }
   const paymentStatus = document.querySelector('input[name="payment-status"]:checked').value;
   let paymentMethod = null;
   if (paymentStatus === 'Pagado') {
       paymentMethod = paymentMethodSelect.value;
       if (paymentMethod === 'otra') {
           const otherPayment = document.getElementById('other-payment-method').value.trim();
-          if (!otherPayment) { alert('Por favor, especifique la otra forma de pago.'); return; }
+          if (!otherPayment) { showAlert('Por favor, especifique la otra forma de pago.'); return; }
           paymentMethod = otherPayment;
       }
   }
@@ -222,10 +236,10 @@ finalizeOrderBtn.addEventListener('click', async () => {
   try {
     const filePath = await window.api.generateTicket(fullOrder);
     if (filePath) { showPrintPreview(filePath); } 
-    else { alert("Hubo un error al generar el ticket."); }
+    else { showAlert("Hubo un error al generar el ticket."); }
   } catch (error) {
     console.error("Error generando ticket:", error);
-    alert("Error crítico al generar el ticket. Revise la consola.");
+    showAlert("Error crítico al generar el ticket. Revise la consola.");
   }
 });
 
@@ -245,17 +259,17 @@ document.getElementById('preview-confirm-btn').addEventListener('click', async (
     searchInput.value = '';
     searchInput.dispatchEvent(new Event('input')); // Para que se aplique el filtro vacío
   } else {
-    alert(`Error al imprimir: ${printResult.error}\nRevise la consola para más detalles.`);
+    showAlert(`Error al imprimir: ${printResult.error}\nRevise la consola para más detalles.`);
   }
 });
 
-reportBtn.addEventListener('click', async () => { const result = await window.api.generateReport(); alert(result.message); });
+reportBtn.addEventListener('click', async () => { const result = await window.api.generateReport(); showAlert(result.message); });
 
 historyListEl.addEventListener('click', async (e) => {
     const button = e.target.closest('button');
     if (!button) return;
 
-    if (button.dataset.deliverId) { const orderId = button.dataset.deliverId; const success = await window.api.updateOrderStatus({ orderId: orderId, status: 'Entregado' }); if (success) { loadOrderHistory(); } else { alert('Hubo un error al actualizar el pedido.'); } }
+    if (button.dataset.deliverId) { const orderId = button.dataset.deliverId; const success = await window.api.updateOrderStatus({ orderId: orderId, status: 'Entregado' }); if (success) { loadOrderHistory(); } else { showAlert('Hubo un error al actualizar el pedido.'); } }
     if (button.dataset.editId) { const orderId = parseInt(button.dataset.editId); const orders = await window.api.getTodaysOrders(); const orderToEdit = orders.find(o => o.id === orderId); if (orderToEdit) { editingOrderId = orderToEdit.id; document.getElementById('customer-name').value = orderToEdit.cliente_nombre; document.getElementById('customer-phone').value = orderToEdit.cliente_telefono; currentOrder = JSON.parse(orderToEdit.items_json).map(item => ({...item, orderId: Date.now() + Math.random()})); updateOrderSummary(); historyTabBtn.disabled = true; historyTabBtn.classList.add('opacity-50', 'cursor-not-allowed'); document.querySelector('.tab-button[data-target="catalog-tab-content"]').click(); } }
     if (button.dataset.payId) { payingOrderId = button.dataset.payId; confirmPaymentModal.classList.remove('hidden'); }
     if (button.dataset.reprintId) {
@@ -266,7 +280,7 @@ historyListEl.addEventListener('click', async (e) => {
             fullOrder = { id: orderToReprint.id, customer: { name: orderToReprint.cliente_nombre, phone: orderToReprint.cliente_telefono }, orderType: orderToReprint.tipo_pedido, total: orderToReprint.total, items: JSON.parse(orderToReprint.items_json), timestamp: orderToReprint.fecha, delivery: { type: orderToReprint.tipo_entrega, time: orderToReprint.hora_entrega }, payment: { status: orderToReprint.estado_pago, method: orderToReprint.forma_pago } };
             const filePath = await window.api.generateTicket(fullOrder);
             if (filePath) { showPrintPreview(filePath); } 
-            else { alert("Hubo un error al generar el ticket de reimpresión."); }
+            else { showAlert("Hubo un error al generar el ticket de reimpresión."); }
         }
     }
 });
@@ -330,12 +344,12 @@ document.getElementById('payment-confirm-btn').addEventListener('click', async (
     let paymentMethod = document.getElementById('history-payment-method').value;
     if (paymentMethod === 'otra') {
         const otherPayment = document.getElementById('history-other-payment-method').value.trim();
-        if (!otherPayment) { alert('Por favor, especifique la otra forma de pago.'); return; }
+        if (!otherPayment) { showAlert('Por favor, especifique la otra forma de pago.'); return; }
         paymentMethod = otherPayment;
     }
     const success = await window.api.updatePaymentStatus({ orderId: payingOrderId, status: 'Pagado', paymentMethod: paymentMethod });
     if (success) { loadOrderHistory(); } 
-    else { alert('Hubo un error al actualizar el estado de pago.'); }
+    else { showAlert('Hubo un error al actualizar el estado de pago.'); }
     confirmPaymentModal.classList.add('hidden');
     payingOrderId = null;
 });
@@ -401,10 +415,10 @@ document.addEventListener('DOMContentLoaded', () => {
       displayProducts(products);
     } else {
       console.error("No se recibieron productos o están vacíos.");
-      alert("Error: No se pudieron cargar los productos desde la base de datos.");
+      showAlert("Error: No se pudieron cargar los productos desde la base de datos.");
     }
   }).catch(error => {
     console.error("Error al llamar a getProducts:", error);
-    alert("Error crítico al cargar productos. Revise la consola.");
+    showAlert("Error crítico al cargar productos. Revise la consola.");
   });
 });
