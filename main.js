@@ -7,8 +7,11 @@ const { print } = require('pdf-to-printer');
 const fs = require('fs');
 const os = require('os');
 const xlsx = require('xlsx');
+const nodemailer = require('nodemailer');
+require('dotenv').config();
 
-// Manejador para obtener todos los productos de la base de datos
+// --- MANEJADORES DE IPC (Lógica de la aplicación) ---
+
 ipcMain.handle('get-products', async () => {
   const db = new sqlite3.Database('./piamonte.db', sqlite3.OPEN_READONLY, (err) => { if (err) console.error(err.message); });
   const runQuery = (sql) => new Promise((resolve, reject) => { db.all(sql, [], (err, rows) => { if (err) reject(err); else resolve(rows); }); });
@@ -24,7 +27,6 @@ ipcMain.handle('get-products', async () => {
   finally { db.close(); }
 });
 
-// Manejador para generar el archivo PDF de un ticket
 ipcMain.handle('generate-ticket', async (event, orderData) => {
   const ticketWidth = 204;
   const tempFilePath = path.join(os.tmpdir(), `ticket-${Date.now()}.pdf`);
@@ -43,7 +45,6 @@ ipcMain.handle('generate-ticket', async (event, orderData) => {
   const formattedDateTime = `${datePart}, ${timePart}`;
   doc.text(formattedDateTime, { align: 'center' });
 
-  // NUEVO: Añadimos el tipo de pedido (Servir o Llevar)
   const tipoPedido = orderData.orderType.charAt(0).toUpperCase() + orderData.orderType.slice(1);
   doc.text(`¿servir o llevar?: ${tipoPedido}`, { align: 'center' });
 
@@ -94,18 +95,18 @@ ipcMain.handle('generate-ticket', async (event, orderData) => {
   return tempFilePath;
 });
 
-// Manejador para confirmar la impresión y guardar/actualizar el pedido
 ipcMain.handle('confirm-print', async (event, {filePath, orderData}) => {
   const db = new sqlite3.Database('./piamonte.db', (err) => { if (err) console.error(err.message); });
   const itemsJson = JSON.stringify(orderData.items);
 
   if (orderData.id) {
     const sql = `UPDATE pedidos SET cliente_nombre = ?, cliente_telefono = ?, tipo_pedido = ?, total = ?, items_json = ?, fecha = ?, tipo_entrega = ?, hora_entrega = ?, forma_pago = ?, estado_pago = ? WHERE id = ?`;
-    db.run(sql, [orderData.customer.name, orderData.customer.phone, orderData.orderType, orderData.total, itemsJson, orderData.timestamp, orderData.delivery.type, orderData.delivery.time, orderData.payment.method, orderData.payment.status, orderData.id], function(err) { /* ... */ });
+    db.run(sql, [orderData.customer.name, orderData.customer.phone, orderData.orderType, orderData.total, itemsJson, orderData.timestamp, orderData.delivery.type, orderData.delivery.time, orderData.payment.method, orderData.payment.status, orderData.id]);
   } else {
     const sql = `INSERT INTO pedidos (cliente_nombre, cliente_telefono, tipo_pedido, total, items_json, fecha, tipo_entrega, hora_entrega, forma_pago, estado_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-    db.run(sql, [orderData.customer.name, orderData.customer.phone, orderData.orderType, orderData.total, itemsJson, orderData.timestamp, orderData.delivery.type, orderData.delivery.time, orderData.payment.method, orderData.payment.status], function(err) { /* ... */ });
+    db.run(sql, [orderData.customer.name, orderData.customer.phone, orderData.orderType, orderData.total, itemsJson, orderData.timestamp, orderData.delivery.type, orderData.delivery.time, orderData.payment.method, orderData.payment.status]);
   }
+  db.close();
 
   try {
     await print(filePath, { printer: 'XP-80C', timeout: 5000 });
@@ -114,18 +115,17 @@ ipcMain.handle('confirm-print', async (event, {filePath, orderData}) => {
   finally { fs.unlinkSync(filePath); }
 });
 
-// Manejador para cancelar la impresión y borrar el PDF temporal
 ipcMain.handle('cancel-print', (event, filePath) => {
   try {
-    fs.unlinkSync(filePath);
-    console.log(`Previa cancelada. Archivo temporal borrado: ${filePath}`);
+    if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+    }
   } catch (error) {
     console.error("No se pudo borrar el archivo temporal:", error);
   }
 });
 
-// Manejador para generar el reporte de ventas en Excel
-ipcMain.handle('generate-report', async () => {
+async function generateDailyReport(autoSavePath = null) {
   const db = new sqlite3.Database('./piamonte.db', sqlite3.OPEN_READONLY, (err) => { if (err) console.error(err.message); });
   const today = new Date().toISOString().slice(0, 10);
   const sql = `SELECT * FROM pedidos WHERE date(fecha) = ?`;
@@ -146,66 +146,86 @@ ipcMain.handle('generate-report', async () => {
   orders.forEach(order => {
     const items = JSON.parse(order.items_json);
     items.forEach(item => {
-      const agregadosStr = item.extras && item.extras.length > 0
-        ? item.extras.map(e => e.nombre).join(', ')
-        : '';
-
+      const agregadosStr = item.extras && item.extras.length > 0 ? item.extras.map(e => e.nombre).join(', ') : '';
       reportData.push({
-        'ID Pedido': order.id,
-        'Fecha': new Date(order.fecha).toLocaleTimeString('es-CL'),
-        'Cliente': order.cliente_nombre,
-        'Tipo Pedido': order.tipo_pedido,
-        'Estado Pedido': order.estado,
-        'Estado Pago': order.estado_pago,
-        'Forma de Pago': order.forma_pago || '',
-        'Producto': item.name,
-        'Agregados': agregadosStr,
-        'Notas': item.notes || '',
-        'Precio Item': item.price
+        'ID Pedido': order.id, 'Hora': new Date(order.fecha).toLocaleTimeString('es-CL'), 'Cliente': order.cliente_nombre,
+        'Tipo Pedido': order.tipo_pedido, 'Estado Pedido': order.estado, 'Estado Pago': order.estado_pago,
+        'Forma de Pago': order.forma_pago || '', 'Producto': item.name, 'Agregados': agregadosStr, 'Notas': item.notes || '', 'Precio Item': item.price
       });
     });
     totalVentas += order.total;
   });
 
   reportData.push({});
-  const totalRow = { 'Notas': 'TOTAL VENTAS', 'Precio Item': totalVentas };
-  reportData.push(totalRow);
+  reportData.push({ 'Notas': 'TOTAL VENTAS', 'Precio Item': totalVentas });
 
   const workbook = xlsx.utils.book_new();
   const worksheet = xlsx.utils.json_to_sheet(reportData);
-
-  worksheet['!cols'] = [
-    { wch: 10 }, // ID Pedido
-    { wch: 12 }, // Fecha
-    { wch: 25 }, // Cliente
-    { wch: 12 }, // Tipo Pedido
-    { wch: 15 }, // Estado Pedido
-    { wch: 15 }, // Estado Pago
-    { wch: 15 }, // Forma de Pago
-    { wch: 30 }, // Producto
-    { wch: 25 }, // Agregados
-    { wch: 25 }, // Notas
-    { wch: 12 }  // Precio Item
-  ];
-
+  worksheet['!cols'] = [ { wch: 10 }, { wch: 12 }, { wch: 25 }, { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 30 }, { wch: 25 }, { wch: 25 }, { wch: 12 } ];
   xlsx.utils.book_append_sheet(workbook, worksheet, 'Ventas del Día');
 
-  const defaultPath = path.join(app.getPath('documents'), `Reporte-Piamonte-${today}.xlsx`);
-  const { filePath } = await dialog.showSaveDialog({
-    title: 'Guardar Reporte de Ventas',
-    defaultPath: defaultPath,
-    filters: [{ name: 'Excel Files', extensions: ['xlsx'] }]
-  });
-
-  if (filePath) {
-    xlsx.writeFile(workbook, filePath);
-    return { success: true, message: `Reporte guardado en: ${filePath}` };
+  let finalPath = autoSavePath;
+  if (!finalPath) {
+    const defaultPath = path.join(app.getPath('documents'), `Reporte-Piamonte-${today}.xlsx`);
+    const { filePath } = await dialog.showSaveDialog({ title: 'Guardar Reporte de Ventas', defaultPath, filters: [{ name: 'Excel Files', extensions: ['xlsx'] }] });
+    finalPath = filePath;
+  }
+  
+  if (finalPath) {
+    xlsx.writeFile(workbook, finalPath);
+    return { success: true, message: `Reporte guardado en: ${finalPath}`, filePath: finalPath };
   } else {
     return { success: false, message: 'Guardado cancelado por el usuario.' };
   }
+}
+
+ipcMain.handle('generate-report', async () => {
+  return await generateDailyReport();
 });
 
-// Manejador para obtener los pedidos del día para el historial
+async function sendReportByEmail() {
+    console.log('Iniciando proceso de envío de reporte por correo con SendGrid...');
+    const today = new Date().toISOString().slice(0, 10);
+    const reportFileName = `Reporte-Piamonte-${today}.xlsx`;
+    const reportPath = path.join(os.tmpdir(), reportFileName);
+
+    const reportResult = await generateDailyReport(reportPath);
+    if (!reportResult.success) {
+        console.log(`No se generó reporte para enviar: ${reportResult.message}`);
+        return;
+    }
+
+    console.log(`Reporte generado en: ${reportResult.filePath}`);
+
+    const transporter = nodemailer.createTransport({
+        host: 'smtp.sendgrid.net',
+        port: 587,
+        auth: {
+            user: 'apikey',
+            pass: process.env.SENDGRID_API_KEY
+        }
+    });
+
+    try {
+        await transporter.sendMail({
+            from: process.env.EMAIL_FROM,
+            to: process.env.EMAIL_TO,
+            subject: `Reporte de Ventas Piamonte - ${today}`,
+            text: 'Adjunto se encuentra el reporte de ventas del día.',
+            attachments: [{
+                filename: reportFileName,
+                path: reportResult.filePath,
+            }]
+        });
+        console.log('Correo de reporte enviado exitosamente a través de SendGrid.');
+        if (fs.existsSync(reportResult.filePath)) {
+            fs.unlinkSync(reportResult.filePath);
+        }
+    } catch (error) {
+        console.error('Error al enviar el correo con SendGrid:', error);
+    }
+}
+
 ipcMain.handle('get-todays-orders', async () => {
   const db = new sqlite3.Database('./piamonte.db', sqlite3.OPEN_READONLY, (err) => { if (err) console.error(err.message); });
   const today = new Date().toISOString().slice(0, 10);
@@ -225,21 +245,15 @@ ipcMain.handle('get-todays-orders', async () => {
   }
 });
 
-// Manejador para actualizar el estado de un pedido
 ipcMain.handle('update-order-status', async (event, { orderId, status }) => {
   const db = new sqlite3.Database('./piamonte.db', (err) => { if (err) console.error(err.message); });
   const sql = `UPDATE pedidos SET estado = ? WHERE id = ?`;
   return new Promise((resolve, reject) => {
     db.run(sql, [status, orderId], function(err) {
-      if (err) {
-        console.error("Error al actualizar estado:", err.message);
-        reject(false);
-      } else {
-        console.log(`Estado del pedido #${orderId} actualizado a "${status}".`);
-        resolve(true);
-      }
+      db.close();
+      if (err) { console.error("Error al actualizar estado:", err.message); reject(false); } 
+      else { resolve(true); }
     });
-    db.close();
   });
 });
 
@@ -248,70 +262,46 @@ ipcMain.handle('update-payment-status', async (event, { orderId, status, payment
   const sql = `UPDATE pedidos SET estado_pago = ?, forma_pago = ? WHERE id = ?`;
   return new Promise((resolve, reject) => {
     db.run(sql, [status, paymentMethod, orderId], function(err) {
-      if (err) {
-        console.error("Error al actualizar estado de pago:", err.message);
-        reject(false);
-      } else {
-        console.log(`Pago del pedido #${orderId} actualizado a "${status}" con método "${paymentMethod}".`);
-        resolve(true);
-      }
+      db.close();
+      if (err) { console.error("Error al actualizar estado de pago:", err.message); reject(false); } 
+      else { resolve(true); }
     });
-    db.close();
   });
 });
 
-// Creación de la ventana principal de la aplicación
+// --- LÓGICA DE LA VENTANA Y CICLO DE VIDA DE LA APP ---
+
 const createWindow = () => {
   const mainWindow = new BrowserWindow({
-    width: 1280,
+    width: 1280, 
     height: 800,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+    webPreferences: { 
+        preload: path.join(__dirname, 'preload.js') 
     },
-    frame: false, // <-- IMPORTANTE: Ventana sin marco
-    autoHideMenuBar: true // <-- IMPORTANTE: Oculta la barra de menú
+    frame: false, 
+    autoHideMenuBar: true
   });
 
-  // AÑADIMOS ESTO PARA FORZAR LA LIMPIEZA DE CACHÉ AL INICIAR
   mainWindow.webContents.session.clearCache().then(() => {
-      console.log("Caché de la aplicación limpiada exitosamente.");
-      // Movemos la carga del archivo aquí, para que ocurra después de limpiar la caché
       mainWindow.loadFile('index.html');
   });
 };
 
-// Lógica de los botones de la ventana
-ipcMain.on('minimize-window', () => {
-    const window = BrowserWindow.getFocusedWindow();
-    if (window) {
-        window.minimize();
-    }
-});
+ipcMain.on('minimize-window', () => { const window = BrowserWindow.getFocusedWindow(); if (window) window.minimize(); });
+ipcMain.on('maximize-window', () => { const window = BrowserWindow.getFocusedWindow(); if (window) { if (window.isMaximized()) window.unmaximize(); else window.maximize(); } });
+ipcMain.on('close-window', () => { const window = BrowserWindow.getFocusedWindow(); if (window) window.close(); });
 
-ipcMain.on('maximize-window', () => {
-    const window = BrowserWindow.getFocusedWindow();
-    if (window) {
-        if (window.isMaximized()) {
-            window.unmaximize();
-        } else {
-            window.maximize();
-        }
-    }
-});
-
-ipcMain.on('close-window', () => {
-    const window = BrowserWindow.getFocusedWindow();
-    if (window) {
-        window.close();
-    }
-});
-
-
-// Lógica del ciclo de vida de la aplicación
 app.whenReady().then(createWindow);
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+
+app.on('window-all-closed', async () => {
+  if (process.platform !== 'darwin') {
+    await sendReportByEmail();
+    app.quit();
+  }
 });
+
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
 });

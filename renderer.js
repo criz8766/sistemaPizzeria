@@ -146,7 +146,12 @@ function openPizzaModal(pizza) {
     });
     hnhSelect1.innerHTML = '';
     hnhSelect2.innerHTML = '';
-    allProducts.pizzas.forEach(p => { hnhSelect1.innerHTML += `<option value="${p.id}">${p.nombre}</option>`; hnhSelect2.innerHTML += `<option value="${p.id}">${p.nombre}</option>`; });
+    // MODIFICACIÓN 1: Filtrar la pizza "Calzone" de las opciones de mitad y mitad
+    const availablePizzasForHalves = allProducts.pizzas.filter(p => p.nombre.toLowerCase() !== 'calzone');
+    availablePizzasForHalves.forEach(p => { 
+        hnhSelect1.innerHTML += `<option value="${p.id}">${p.nombre}</option>`; 
+        hnhSelect2.innerHTML += `<option value="${p.id}">${p.nombre}</option>`; 
+    });
     hnhSelect1.value = pizza.id;
     hnhSelect2.value = pizza.id;
     document.getElementById('pizza-notes').value = '';
@@ -163,8 +168,11 @@ function updateModalUI() {
         btn.classList.toggle('active', btn.dataset.size === size);
     });
     const hnhSection = document.getElementById('half-and-half-section');
-    hnhSection.classList.toggle('hidden', !['mediana', 'xl'].includes(size));
-    if (!['mediana', 'xl'].includes(size)) {
+    // MODIFICACIÓN 2: Ocultar la opción de mitad y mitad si la pizza es Calzone
+    const isCalzone = currentPizzaConfig.basePizza.nombre.toLowerCase() === 'calzone';
+    hnhSection.classList.toggle('hidden', isCalzone || !['mediana', 'xl'].includes(size));
+    
+    if (isCalzone || !['mediana', 'xl'].includes(size)) {
       hnhCheckbox.checked = false;
       hnhOptions.classList.add('hidden');
     }
