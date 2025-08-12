@@ -8,7 +8,7 @@
 # Para este proyecto, es bueno que se suba a GitHub porque contiene todo tu catálogo de productos.
 # Si en el futuro no quieres que el historial de pedidos se suba, simplemente
 # añade la siguiente línea:
-# piamonte.db
+piamonte.db
 
 # ## Archivos de Log y Debug ##
 # Registros generados por npm en caso de errores.
