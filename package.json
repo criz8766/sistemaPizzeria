@@ -1,0 +1,23 @@
+{
+  "name": "sistemapizzeriapiamonte",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^37.2.6"
+  },
+  "dependencies": {
+    "node-thermal-printer": "^4.5.0",
+    "pdf-to-printer": "^5.6.0",
+    "pdfkit": "^0.17.1",
+    "sqlite3": "^5.1.7",
+    "xlsx": "^0.18.5"
+  }
+}

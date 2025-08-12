@@ -1,0 +1,47 @@
+# ## Dependencias ##
+# La carpeta más importante a ignorar. Contiene miles de archivos que
+# cualquiera puede reinstalar ejecutando `npm install`.
+/node_modules
+
+# ## Archivos de Base de Datos ##
+# He dejado tu base de datos `piamonte.db` FUERA de esta lista intencionadamente.
+# Para este proyecto, es bueno que se suba a GitHub porque contiene todo tu catálogo de productos.
+# Si en el futuro no quieres que el historial de pedidos se suba, simplemente
+# añade la siguiente línea:
+# piamonte.db
+
+# ## Archivos de Log y Debug ##
+# Registros generados por npm en caso de errores.
+npm-debug.log*
+yarn-error.log
+yarn-debug.log
+
+# ## Archivos Generados por el Sistema Operativo ##
+# Archivos de metadatos de macOS
+.DS_Store
+# Archivos de caché de vistas en miniatura de Windows
+Thumbs.db
+
+# ## Archivos de Editores de Código ##
+# Carpeta de configuración de Visual Studio Code
+.vscode/
+# Archivos de Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ## Archivos de Empaquetado y Build ##
+# Carpetas que se crearán cuando empaquetes la aplicación para distribución.
+# No deben estar en el repositorio porque se generan a partir del código fuente.
+/out/
+/dist/
+/build/
+/release/
+*.exe
+*.dmg
+*.deb
+*.rpm
+
+# ## Archivos Temporales o de Entorno ##
+# Archivos que a veces contienen claves de API o configuración local.
+.env
+.env.local

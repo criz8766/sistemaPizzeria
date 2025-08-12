@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sistema Pizzería Piamonte</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 font-sans">
+    <div class="flex h-screen">
+      <div class="w-1/3 bg-white p-4 shadow-lg flex flex-col">
+        <h2 class="text-2xl font-bold border-b pb-2">Pedido Actual</h2>
+        <div class="py-2">
+            <button id="report-btn" class="w-full bg-gray-600 text-white font-semibold py-2 rounded-lg hover:bg-gray-700 transition-colors">
+                Generar Reporte Diario
+            </button>
+        </div>
+        <div id="order-details" class="py-2 space-y-3">
+          <div>
+            <label for="customer-name" class="block text-sm font-medium text-gray-700">Nombre Cliente o mesa</label>
+            <input type="text" id="customer-name" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+          </div>
+          <div>
+            <label for="customer-phone" class="block text-sm font-medium text-gray-700">Teléfono (Opcional)</label>
+            <input type="tel" id="customer-phone" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+          </div>
+          <div class="flex gap-4">
+            <div class="flex items-center">
+              <input id="type-serve" name="order-type" type="radio" value="servir" class="h-4 w-4 border-gray-300" checked>
+              <label for="type-serve" class="ml-2 block text-sm text-gray-900">Para Servir</label>
+            </div>
+            <div class="flex items-center">
+              <input id="type-takeout" name="order-type" type="radio" value="llevar" class="h-4 w-4 border-gray-300">
+              <label for="type-takeout" class="ml-2 block text-sm text-gray-900">Para Llevar</label>
+            </div>
+          </div>
+          <div class="border-t pt-3 mt-2">
+              <div class="flex gap-4">
+                  <div class="flex items-center">
+                      <input id="delivery-delay" name="delivery-type" type="radio" value="demora" class="h-4 w-4 border-gray-300" checked>
+                      <label for="delivery-delay" class="ml-2 block text-sm text-gray-900">Demora</label>
+                  </div>
+                  <div class="flex items-center">
+                      <input id="delivery-scheduled" name="delivery-type" type="radio" value="agendado" class="h-4 w-4 border-gray-300">
+                      <label for="delivery-scheduled" class="ml-2 block text-sm text-gray-900">Agendado</label>
+                  </div>
+              </div>
+              <div id="delivery-delay-input" class="mt-2">
+                  <label for="delay-minutes" class="block text-sm font-medium text-gray-700">Minutos de demora</label>
+                  <input type="number" id="delay-minutes" value="30" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+              </div>
+              <div id="delivery-scheduled-input" class="mt-2 hidden">
+                  <label for="scheduled-time" class="block text-sm font-medium text-gray-700">Hora de entrega</label>
+                  <input type="time" id="scheduled-time" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+              </div>
+          </div>
+          <div class="border-t pt-3 mt-2">
+              <label class="block text-sm font-medium text-gray-700">Estado del Pago</label>
+              <div class="flex gap-4 mt-1">
+                  <div class="flex items-center">
+                      <input id="status-unpaid" name="payment-status" type="radio" value="Por Pagar" class="h-4 w-4 border-gray-300" checked>
+                      <label for="status-unpaid" class="ml-2 block text-sm text-gray-900">Por Pagar</label>
+                  </div>
+                  <div class="flex items-center">
+                      <input id="status-paid" name="payment-status" type="radio" value="Pagado" class="h-4 w-4 border-gray-300">
+                      <label for="status-paid" class="ml-2 block text-sm text-gray-900">Pagado</label>
+                  </div>
+              </div>
+              <div id="payment-method-wrapper" class="mt-2 hidden">
+                  <label for="payment-method" class="block text-sm font-medium text-gray-700">Forma de Pago</label>
+                  <select id="payment-method" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                      <option>Efectivo</option>
+                      <option>Debito</option>
+                      <option>Credito</option>
+                      <option>Edenred</option>
+                      <option>Pluxee</option>
+                      <option>Amipass</option>
+                      <option value="otra">Otra</option>
+                  </select>
+                  <div id="other-payment-wrapper" class="mt-2 hidden">
+                      <label for="other-payment-method" class="block text-sm font-medium text-gray-700">Especificar otra forma de pago</label>
+                      <input type="text" id="other-payment-method" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                  </div>
+              </div>
+          </div>
+        </div>
+        <div id="order-summary" class="mt-2 flex-grow overflow-y-auto border-t pt-2">
+          <p class="text-gray-500">El pedido está vacío.</p>
+        </div>
+        <div class="border-t pt-4">
+          <div class="text-2xl font-bold flex justify-between">
+            <span>TOTAL:</span>
+            <span id="total-price">$0</span>
+          </div>
+          <button id="finalize-order-btn" class="w-full bg-green-500 text-white font-bold py-3 mt-4 rounded-lg text-xl hover:bg-green-600 transition-colors">
+            Finalizar Pedido
+          </button>
+        </div>
+      </div>
+      <div class="w-2/3 p-4 flex flex-col">
+        <div class="flex border-b mb-4">
+          <button class="tab-button active" data-target="catalog-tab-content">Catálogo</button>
+          <button class="tab-button" data-target="history-tab-content">Historial</button>
+        </div>
+        <div id="catalog-tab-content" class="tab-content flex-grow overflow-y-auto">
+            <div class="flex border-b mb-4">
+              <button class="sub-tab-button active" data-target="pizzas-tab">Pizzas</button>
+              <button class="sub-tab-button" data-target="churrascos-tab">Churrascos</button>
+              <button class="sub-tab-button" data-target="otros-tab">Otros Productos</button>
+            </div>
+            <div id="catalog-content" class="flex-grow overflow-y-auto">
+              <div id="pizzas-tab" class="sub-tab-content grid grid-cols-4 gap-4"></div>
+              <div id="churrascos-tab" class="sub-tab-content hidden grid grid-cols-4 gap-4"></div>
+              <div id="otros-tab" class="sub-tab-content hidden"></div>
+            </div>
+        </div>
+        <div id="history-tab-content" class="tab-content hidden flex-grow overflow-y-auto">
+            <div id="history-list" class="space-y-3"></div>
+        </div>
+      </div>
+      <div id="pizza-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-1/2 max-w-2xl">
+          <h2 id="modal-pizza-name" class="text-3xl font-bold mb-4"></h2>
+          <div class="mb-4">
+            <h3 class="font-semibold text-lg mb-2">Tamaño</h3>
+            <div id="size-options" class="flex gap-2">
+              <button class="size-button" data-size="chica">Chica</button>
+              <button class="size-button" data-size="mediana">Mediana</button>
+              <button class="size-button" data-size="xl">XL</button>
+            </div>
+          </div>
+          <div id="half-and-half-section" class="hidden mb-4 p-3 bg-gray-100 rounded-lg">
+            <label class="flex items-center gap-2"><input type="checkbox" id="half-and-half-checkbox"><span class="font-semibold">Pedir Mitad y Mitad</span></label>
+            <div id="half-options" class="hidden mt-2 grid grid-cols-2 gap-4">
+              <select id="half-1" class="border p-2 rounded"></select>
+              <select id="half-2" class="border p-2 rounded"></select>
+            </div>
+          </div>
+          <div class="mb-4">
+            <h3 class="font-semibold text-lg mb-2">Agregados</h3>
+            <div id="extras-container" class="grid grid-cols-3 gap-2 max-h-32 overflow-y-auto p-2 border rounded"></div>
+          </div>
+          <div class="mb-6">
+              <h3 class="font-semibold text-lg mb-2">Notas Adicionales</h3>
+              <textarea id="pizza-notes" class="w-full p-2 border rounded" placeholder="Ej: Sin cebolla, masa bien cocida..."></textarea>
+          </div>
+          <div class="flex justify-between items-center">
+            <span id="modal-pizza-price" class="text-2xl font-bold"></span>
+            <div class="flex gap-4">
+              <button id="cancel-button" class="px-6 py-2 bg-gray-300 rounded-lg font-semibold hover:bg-gray-400">Cancelar</button>
+              <button id="add-to-order-button" class="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700">Añadir al Pedido</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="preview-modal" class="fixed inset-0 bg-black bg-opacity-75 hidden flex items-center justify-center">
+        <div class="bg-white p-4 rounded-lg shadow-xl w-1/3 flex flex-col" style="height: 90vh;">
+          <h2 class="text-2xl font-bold mb-4 border-b pb-2">Vista Previa del Ticket</h2>
+          <div class="flex-grow border rounded-md overflow-hidden">
+            <embed id="pdf-preview" src="" type="application/pdf" width="100%" height="100%">
+          </div>
+          <div class="flex gap-4 mt-4">
+            <button id="preview-cancel-btn" class="w-full px-6 py-3 bg-gray-300 rounded-lg font-semibold hover:bg-gray-400">Cancelar</button>
+            <button id="preview-confirm-btn" class="w-full px-6 py-3 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600">Confirmar Impresión</button>
+          </div>
+        </div>
+      </div>
+      <div id="notes-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-1/3">
+          <h2 id="notes-modal-product-name" class="text-2xl font-bold mb-4"></h2>
+          <div class="mb-4">
+            <h3 class="font-semibold text-lg mb-2">Indicaciones Adicionales</h3>
+            <textarea id="product-notes" class="w-full p-2 border rounded" placeholder="Ej: Sin tomate, bien cocido..."></textarea>
+          </div>
+          <div class="flex gap-4 mt-4">
+            <button id="notes-cancel-btn" class="w-full px-6 py-2 bg-gray-300 rounded-lg font-semibold hover:bg-gray-400">Cancelar</button>
+            <button id="notes-confirm-btn" class="w-full px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700">Añadir al Pedido</button>
+          </div>
+        </div>
+      </div>
+      <div id="confirm-payment-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-1/3">
+          <h2 class="text-2xl font-bold mb-4">Confirmar Pago</h2>
+          <div class="mb-4">
+            <label for="history-payment-method" class="block text-sm font-medium text-gray-700">Forma de Pago</label>
+            <select id="history-payment-method" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+                <option>Efectivo</option>
+                <option>Debito</option>
+                <option>Credito</option>
+                <option>Edenred</option>
+                <option>Pluxee</option>
+                <option>Amipass</option>
+                <option value="otra">Otra</option>
+            </select>
+            <div id="history-other-payment-wrapper" class="mt-2 hidden">
+                <label for="history-other-payment-method" class="block text-sm font-medium text-gray-700">Especificar otra forma de pago</label>
+                <input type="text" id="history-other-payment-method" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">
+            </div>
+          </div>
+          <div class="flex gap-4 mt-4">
+            <button id="payment-cancel-btn" class="w-full px-6 py-2 bg-gray-300 rounded-lg font-semibold hover:bg-gray-400">Cancelar</button>
+            <button id="payment-confirm-btn" class="w-full px-6 py-2 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600">Confirmar Pago</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="./renderer.js"></script>
+    <style>
+      .tab-button { @apply px-6 py-2 text-xl font-semibold text-gray-600 border-b-4 border-transparent; }
+      .tab-button.active { @apply text-blue-600 border-blue-600; }
+      .sub-tab-button { @apply px-4 py-2 text-lg font-semibold text-gray-600 border-b-4 border-transparent; }
+      .sub-tab-button.active { @apply text-purple-600 border-purple-600; }
+      .product-card { @apply bg-white p-3 rounded-lg shadow cursor-pointer hover:shadow-xl transition-shadow text-center; }
+      .size-button { @apply px-4 py-2 border rounded-lg w-full; }
+      .size-button.active { @apply bg-blue-600 text-white border-blue-600; }
+    </style>
+  </body>
+</html>
