@@ -6,51 +6,67 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       /* Estilos para un scrollbar más discreto y moderno */
-      ::-webkit-scrollbar { width: 8px; }
-      ::-webkit-scrollbar-track { background: #f1f1f1; }
-      ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
-      ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+      ::-webkit-scrollbar {
+        width: 12px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #d1d5db;
+        border-radius: 10px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #9ca3af;
+      }
 
       /* Estilo para el botón de tamaño activo en el modal de pizza */
       .size-button.active {
-        background-color: #3b82f6; /* bg-blue-500 */
+        background-color: #3b82f6;
         color: white;
-        border-color: #3b82f6; /* border-blue-500 */
+        border-color: #3b82f6;
+      }
+
+      /* Estilo mejorado para la pestaña activa */
+      .tab-button.active {
+        border-color: #3b82f6;
+        color: #2563eb;
+        background-color: #f9fafb;
+      }
+
+      .z-10 {
+        z-index: 0 !important;
       }
     </style>
 </head>
 <body class="bg-gray-100 font-sans antialiased text-gray-800 overflow-hidden">
     <div class="flex h-screen">
 
-      <!-- =============================================================== -->
-      <!-- COLUMNA IZQUIERDA: Pedido Actual (Panel de Control Principal) -->
-      <!-- =============================================================== -->
       <aside class="w-1/3 max-w-md bg-white p-6 shadow-2xl flex flex-col">
-        <h2 class="text-2xl font-bold mb-4 text-gray-900">Pedido Actual</h2>
+        <h2 class="text-3xl font-bold mb-4 text-gray-900 border-b pb-3">Pedido Actual</h2>
         
-        <!-- Este div ahora envuelve todo el contenido que necesita scroll -->
         <div class="flex-grow overflow-y-auto pr-2 space-y-4">
           <div class="space-y-4">
             <input type="text" id="customer-name" class="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Nombre Cliente o Mesa *">
             <input type="tel" id="customer-phone" class="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Teléfono (Opcional)">
           </div>
           
-          <hr class="my-2">
+          <hr class="my-3">
 
           <div id="order-details" class="space-y-4 text-sm">
             <div>
               <h3 class="font-semibold mb-2">Tipo de Pedido</h3>
-              <div class="flex gap-4"><label class="flex items-center"><input type="radio" name="order-type" value="servir" class="mr-2" checked>Para Servir</label><label class="flex items-center"><input type="radio" name="order-type" value="llevar" class="mr-2">Para Llevar</label></div>
+              <div class="flex gap-4"><label class="flex items-center cursor-pointer"><input type="radio" name="order-type" value="servir" class="mr-2" checked>Para Servir</label><label class="flex items-center cursor-pointer"><input type="radio" name="order-type" value="llevar" class="mr-2">Para Llevar</label></div>
             </div>
             <div>
               <h3 class="font-semibold mb-2">Entrega</h3>
-              <div class="flex gap-4"><label class="flex items-center"><input id="delivery-delay" name="delivery-type" type="radio" value="demora" class="mr-2" checked>Demora</label><label class="flex items-center"><input id="delivery-scheduled" name="delivery-type" type="radio" value="agendado" class="mr-2">Agendado</label></div>
+              <div class="flex gap-4"><label class="flex items-center cursor-pointer"><input id="delivery-delay" name="delivery-type" type="radio" value="demora" class="mr-2" checked>Demora</label><label class="flex items-center cursor-pointer"><input id="delivery-scheduled" name="delivery-type" type="radio" value="agendado" class="mr-2">Agendado</label></div>
               <div id="delivery-delay-input" class="mt-2"><input type="number" id="delay-minutes" value="30" class="w-full p-2 text-sm border border-gray-200 rounded-md" placeholder="Minutos"></div>
               <div id="delivery-scheduled-input" class="mt-2 hidden"><input type="time" id="scheduled-time" class="w-full p-2 text-sm border border-gray-200 rounded-md"></div>
             </div>
             <div>
               <h3 class="font-semibold mb-2">Pago</h3>
-              <div class="flex gap-4"><label class="flex items-center"><input id="status-unpaid" name="payment-status" type="radio" value="Por Pagar" class="mr-2" checked>Por Pagar</label><label class="flex items-center"><input id="status-paid" name="payment-status" type="radio" value="Pagado" class="mr-2">Pagado</label></div>
+              <div class="flex gap-4"><label class="flex items-center cursor-pointer"><input id="status-unpaid" name="payment-status" type="radio" value="Por Pagar" class="mr-2" checked>Por Pagar</label><label class="flex items-center cursor-pointer"><input id="status-paid" name="payment-status" type="radio" value="Pagado" class="mr-2">Pagado</label></div>
               <div id="payment-method-wrapper" class="mt-2 hidden">
                   <select id="payment-method" class="w-full p-2 text-sm border border-gray-200 rounded-md">
                       <option>Efectivo</option><option>Debito</option><option>Credito</option><option>Edenred</option><option>Pluxee</option><option>Amipass</option><option value="otra">Otra</option>
@@ -74,16 +90,15 @@
         </div>
       </aside>
 
-      <!-- =============================================================== -->
-      <!-- COLUMNA DERECHA: Catálogo e Historial -->
-      <!-- =============================================================== -->
-      <main class="w-2/3 p-6 flex flex-col">
-        <div class="flex border-b mb-4">
-          <button class="tab-button active py-2 px-4 font-semibold text-gray-500 border-b-2 border-blue-600 text-blue-600" data-target="catalog-tab-content">Catálogo</button>
-          <button class="tab-button py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent hover:text-blue-600 hover:border-blue-600" data-target="history-tab-content">Historial</button>
+      <main class="w-2/3 flex-1 flex flex-col overflow-y-auto">
+        <div class="px-6 pt-6 sticky top-0 bg-gray-100 z-10">
+          <div class="flex border-b">
+            <button class="tab-button active py-2 px-6 font-semibold border-b-4" data-target="catalog-tab-content">Catálogo</button>
+            <button class="tab-button py-2 px-6 font-semibold border-b-4 border-transparent text-gray-500 hover:text-blue-600" data-target="history-tab-content">Historial</button>
+          </div>
         </div>
 
-        <div id="catalog-tab-content" class="tab-content flex flex-col flex-grow">
+        <div id="catalog-tab-content" class="tab-content flex flex-col p-6">
           <div class="flex justify-between items-center mb-4">
             <div class="flex gap-2 bg-gray-200 p-1 rounded-lg">
               <button class="sub-tab-button active px-4 py-1 text-sm font-semibold rounded-md bg-white shadow-sm" data-target="pizzas-tab">Pizzas</button>
@@ -95,15 +110,15 @@
               <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
             </div>
           </div>
-          <!-- Este div ahora tiene el scroll -->
-          <div id="catalog-content" class="flex-grow overflow-y-auto pr-2">
+          
+          <div id="catalog-content">
             <div id="pizzas-tab" class="sub-tab-content grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
             <div id="churrascos-tab" class="sub-tab-content hidden grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
             <div id="otros-tab" class="sub-tab-content hidden"></div>
           </div>
         </div>
 
-        <div id="history-tab-content" class="tab-content hidden flex-grow overflow-y-auto pr-2">
+        <div id="history-tab-content" class="tab-content hidden p-6">
           <div class="flex justify-between items-center mb-4">
             <h2 class="text-xl font-bold">Historial de Hoy</h2>
             <button id="report-btn" class="bg-gray-700 text-white text-sm font-semibold py-2 px-4 rounded-lg hover:bg-gray-800 transition-colors">Generar Reporte Diario</button>
@@ -113,14 +128,11 @@
       </main>
     </div>
 
-    <!-- =============================================================== -->
-    <!-- MODALES (Ocultos por defecto) -->
-    <!-- =============================================================== -->
     <div id="pizza-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4">
         <div class="bg-white p-6 rounded-lg shadow-xl w-1/2 max-w-2xl">
           <h2 id="modal-pizza-name" class="text-3xl font-bold mb-4"></h2>
           <div class="mb-4"><h3 class="font-semibold text-lg mb-2">Tamaño</h3><div id="size-options" class="flex gap-2"><button class="size-button border rounded-md px-4 py-2" data-size="chica">Chica</button><button class="size-button border rounded-md px-4 py-2" data-size="mediana">Mediana</button><button class="size-button border rounded-md px-4 py-2" data-size="xl">XL</button></div></div>
-          <div id="half-and-half-section" class="hidden mb-4 p-3 bg-gray-100 rounded-lg"><label class="flex items-center gap-2"><input type="checkbox" id="half-and-half-checkbox"><span class="font-semibold">Pedir Mitad y Mitad</span></label><div id="half-options" class="hidden mt-2 grid grid-cols-2 gap-4"><select id="half-1" class="border p-2 rounded"></select><select id="half-2" class="border p-2 rounded"></select></div></div>
+          <div id="half-and-half-section" class="hidden mb-4 p-3 bg-gray-100 rounded-lg"><label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="half-and-half-checkbox"><span class="font-semibold">Pedir Mitad y Mitad</span></label><div id="half-options" class="hidden mt-2 grid grid-cols-2 gap-4"><select id="half-1" class="border p-2 rounded"></select><select id="half-2" class="border p-2 rounded"></select></div></div>
           <div class="mb-4">
             <h3 class="font-semibold text-lg mb-2">Agregados</h3>
             <div class="relative mb-2">

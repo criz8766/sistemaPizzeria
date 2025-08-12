@@ -33,53 +33,61 @@ const otherPaymentWrapper = document.getElementById('other-payment-wrapper');
 const searchInput = document.getElementById('search-products');
 const searchExtrasInput = document.getElementById('search-extras');
 
+
+
 // --- LÓGICA DE VISTA PREVIA ---
 function showPrintPreview(filePath) {
   tempPdfPath = filePath;
   const pdfPreview = document.getElementById('pdf-preview');
+  // Añadimos un timestamp para forzar la recarga del PDF y evitar problemas de caché
   pdfPreview.src = `${filePath}?t=${new Date().getTime()}`;
   previewModal.classList.remove('hidden');
 }
 
 // --- LÓGICA DE HISTORIAL ---
 async function loadOrderHistory() {
-    const orders = await window.api.getTodaysOrders();
-    historyListEl.innerHTML = '';
-    if (orders.length === 0) {
-        historyListEl.innerHTML = '<p class="text-gray-500 text-center mt-8">No hay pedidos registrados hoy.</p>';
-        return;
+    try {
+        const orders = await window.api.getTodaysOrders();
+        historyListEl.innerHTML = '';
+        if (orders.length === 0) {
+            historyListEl.innerHTML = '<p class="text-gray-500 text-center mt-8">No hay pedidos registrados hoy.</p>';
+            return;
+        }
+        orders.forEach(order => {
+            const items = JSON.parse(order.items_json);
+            const isDelivered = order.estado === 'Entregado';
+            const isPaid = order.estado_pago === 'Pagado';
+            const orderCard = document.createElement('div');
+            orderCard.className = `border rounded-lg shadow-sm p-4 ${isDelivered ? 'bg-green-50' : 'bg-white'}`;
+            orderCard.innerHTML = `
+                <div class="flex justify-between items-start border-b pb-2 mb-2">
+                    <div>
+                        <p class="font-bold text-lg">Pedido #${order.id} - ${order.cliente_nombre}</p>
+                        <p class="text-sm text-gray-500">${new Date(order.fecha).toLocaleTimeString('es-CL')}</p>
+                    </div>
+                    <div class="text-right flex-shrink-0">
+                        <p class="font-bold text-lg">$${order.total.toLocaleString('es-CL')}</p>
+                        <p class="text-xs text-gray-500">${order.forma_pago || ''}</p>
+                        <p class="text-xs font-semibold ${isPaid ? 'text-green-600' : 'text-red-600'}">${order.estado_pago}</p>
+                        <p class="text-xs font-semibold ${isDelivered ? 'text-green-600' : 'text-blue-600'}">${order.estado}</p>
+                    </div>
+                </div>
+                <div class="text-sm space-y-1 my-2">
+                    ${items.map(item => `<div>- ${item.name} ${item.notes ? `<span class="text-gray-500">(${item.notes})</span>` : ''}</div>`).join('')}
+                </div>
+                <div class="text-right mt-3 space-x-2">
+                    <button class="bg-gray-500 text-white text-xs px-3 py-1 rounded hover:bg-gray-600" data-reprint-id="${order.id}">Reimprimir</button>
+                    <button class="bg-yellow-500 text-white text-xs px-3 py-1 rounded hover:bg-yellow-600 ${isDelivered ? 'hidden' : ''}" data-edit-id="${order.id}">Editar</button>
+                    <button class="bg-green-500 text-white text-xs px-3 py-1 rounded hover:bg-green-600 disabled:bg-gray-400" data-pay-id="${order.id}" ${isPaid ? 'disabled' : ''}>Marcar Pagado</button>
+                    <button class="bg-blue-500 text-white text-xs px-3 py-1 rounded hover:bg-blue-600 disabled:bg-gray-400" data-deliver-id="${order.id}" ${isDelivered ? 'disabled' : ''}>Marcar Entregado</button>
+                </div>
+            `;
+            historyListEl.appendChild(orderCard);
+        });
+    } catch (error) {
+        console.error("Error al cargar el historial de pedidos:", error);
+        historyListEl.innerHTML = '<p class="text-red-500 text-center mt-8">No se pudo cargar el historial.</p>';
     }
-    orders.forEach(order => {
-        const items = JSON.parse(order.items_json);
-        const isDelivered = order.estado === 'Entregado';
-        const isPaid = order.estado_pago === 'Pagado';
-        const orderCard = document.createElement('div');
-        orderCard.className = `border rounded-lg shadow-sm p-4 ${isDelivered ? 'bg-green-50' : 'bg-white'}`;
-        orderCard.innerHTML = `
-            <div class="flex justify-between items-start border-b pb-2 mb-2">
-                <div>
-                    <p class="font-bold text-lg">Pedido #${order.id} - ${order.cliente_nombre}</p>
-                    <p class="text-sm text-gray-500">${new Date(order.fecha).toLocaleTimeString('es-CL')}</p>
-                </div>
-                <div class="text-right flex-shrink-0">
-                    <p class="font-bold text-lg">$${order.total.toLocaleString('es-CL')}</p>
-                    <p class="text-xs text-gray-500">${order.forma_pago || ''}</p>
-                    <p class="text-xs font-semibold ${isPaid ? 'text-green-600' : 'text-red-600'}">${order.estado_pago}</p>
-                    <p class="text-xs font-semibold ${isDelivered ? 'text-green-600' : 'text-blue-600'}">${order.estado}</p>
-                </div>
-            </div>
-            <div class="text-sm space-y-1 my-2">
-                ${items.map(item => `<div>- ${item.name} ${item.notes ? `<span class="text-gray-500">(${item.notes})</span>` : ''}</div>`).join('')}
-            </div>
-            <div class="text-right mt-3 space-x-2">
-                <button class="bg-gray-500 text-white text-xs px-3 py-1 rounded hover:bg-gray-600" data-reprint-id="${order.id}">Reimprimir</button>
-                <button class="bg-yellow-500 text-white text-xs px-3 py-1 rounded hover:bg-yellow-600 ${isDelivered ? 'hidden' : ''}" data-edit-id="${order.id}">Editar</button>
-                <button class="bg-green-500 text-white text-xs px-3 py-1 rounded hover:bg-green-600 disabled:bg-gray-400" data-pay-id="${order.id}" ${isPaid ? 'disabled' : ''}>Marcar Pagado</button>
-                <button class="bg-blue-500 text-white text-xs px-3 py-1 rounded hover:bg-blue-600 disabled:bg-gray-400" data-deliver-id="${order.id}" ${isDelivered ? 'disabled' : ''}>Marcar Entregado</button>
-            </div>
-        `;
-        historyListEl.appendChild(orderCard);
-    });
 }
 
 // --- LÓGICA DEL PEDIDO ---
@@ -89,6 +97,7 @@ function updateOrderSummary() {
   orderSummaryEl.innerHTML = '';
   if (currentOrder.length === 0) {
     orderSummaryEl.innerHTML = '<p class="text-center text-gray-500 py-8">El pedido está vacío</p>';
+    // Si el pedido se vacía, se puede volver a habilitar la pestaña de historial
     editingOrderId = null;
     historyTabBtn.disabled = false;
     historyTabBtn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -116,13 +125,13 @@ function updateOrderSummary() {
 
 // --- LÓGICA DE MODALES ---
 function openPizzaModal(pizza) {
-    currentPizzaConfig = { basePizza: pizza, size: 'mediana', price: pizza.precio_mediana };
+    currentPizzaConfig = { basePizza: pizza, size: 'mediana', price: pizza.precio_mediana, extras: [] };
     document.getElementById('modal-pizza-name').textContent = pizza.nombre;
     const extrasContainer = document.getElementById('extras-container');
     extrasContainer.innerHTML = '';
     allProducts.agregados.forEach(extra => {
         const label = document.createElement('label');
-        label.className = 'flex items-center gap-2 p-1 rounded hover:bg-gray-100';
+        label.className = 'flex items-center gap-2 p-1 rounded hover:bg-gray-100 cursor-pointer';
         label.innerHTML = `<input type="checkbox" class="extra-checkbox" data-id="${extra.id}"><span>${extra.nombre}</span>`;
         extrasContainer.appendChild(label);
     });
@@ -146,6 +155,10 @@ function updateModalUI() {
     });
     const hnhSection = document.getElementById('half-and-half-section');
     hnhSection.classList.toggle('hidden', !['mediana', 'xl'].includes(size));
+    if (!['mediana', 'xl'].includes(size)) {
+      hnhCheckbox.checked = false;
+      hnhOptions.classList.add('hidden');
+    }
     updateModalPrice();
 }
 
@@ -158,12 +171,12 @@ function updateModalPrice() {
         const pizza1 = allProducts.pizzas.find(p => p.id === pizza1Id);
         const pizza2 = allProducts.pizzas.find(p => p.id === pizza2Id);
         if(pizza1 && pizza2) {
-            const price1 = pizza1[`precio_${size}`];
-            const price2 = pizza2[`precio_${size}`];
+            const price1 = pizza1[`precio_${size}`] || 0;
+            const price2 = pizza2[`precio_${size}`] || 0;
             basePrice = Math.round((price1 + price2) / 2);
         }
     } else {
-        basePrice = currentPizzaConfig.basePizza[`precio_${size}`];
+        basePrice = currentPizzaConfig.basePizza[`precio_${size}`] || 0;
     }
     let extrasPrice = 0;
     currentPizzaConfig.extras = [];
@@ -173,7 +186,7 @@ function updateModalPrice() {
         if (extra) {
             currentPizzaConfig.extras.push(extra);
             const priceKey = size === 'chica' ? 'precio_individual' : `precio_${size}`;
-            extrasPrice += extra[priceKey];
+            extrasPrice += extra[priceKey] || 0;
         }
     });
     currentPizzaConfig.price = basePrice + extrasPrice;
@@ -206,9 +219,14 @@ finalizeOrderBtn.addEventListener('click', async () => {
       }
   }
   fullOrder = { id: editingOrderId, customer: { name: customerName, phone: document.getElementById('customer-phone').value.trim() }, orderType: document.querySelector('input[name="order-type"]:checked').value, total: currentOrder.reduce((sum, item) => sum + item.price, 0), items: currentOrder, timestamp: new Date().toISOString(), delivery: { type: deliveryType, time: deliveryTime }, payment: { status: paymentStatus, method: paymentMethod } };
-  const filePath = await window.api.generateTicket(fullOrder);
-  if (filePath) { showPrintPreview(filePath); } 
-  else { alert("Hubo un error al generar el ticket."); }
+  try {
+    const filePath = await window.api.generateTicket(fullOrder);
+    if (filePath) { showPrintPreview(filePath); } 
+    else { alert("Hubo un error al generar el ticket."); }
+  } catch (error) {
+    console.error("Error generando ticket:", error);
+    alert("Error crítico al generar el ticket. Revise la consola.");
+  }
 });
 
 document.getElementById('preview-cancel-btn').addEventListener('click', () => { window.api.cancelPrint(tempPdfPath); previewModal.classList.add('hidden'); });
@@ -222,6 +240,10 @@ document.getElementById('preview-confirm-btn').addEventListener('click', async (
     document.getElementById('customer-name').value = '';
     document.getElementById('customer-phone').value = '';
     updateOrderSummary();
+    // Vuelve a la pestaña de catálogo y resetea los filtros.
+    document.querySelector('.tab-button[data-target="catalog-tab-content"]').click();
+    searchInput.value = '';
+    searchInput.dispatchEvent(new Event('input')); // Para que se aplique el filtro vacío
   } else {
     alert(`Error al imprimir: ${printResult.error}\nRevise la consola para más detalles.`);
   }
@@ -230,11 +252,14 @@ document.getElementById('preview-confirm-btn').addEventListener('click', async (
 reportBtn.addEventListener('click', async () => { const result = await window.api.generateReport(); alert(result.message); });
 
 historyListEl.addEventListener('click', async (e) => {
-    if (e.target.matches('button[data-deliver-id]')) { const orderId = e.target.dataset.deliverId; const success = await window.api.updateOrderStatus({ orderId: orderId, status: 'Entregado' }); if (success) { loadOrderHistory(); } else { alert('Hubo un error al actualizar el pedido.'); } }
-    if (e.target.matches('button[data-edit-id]')) { const orderId = parseInt(e.target.dataset.editId); const orders = await window.api.getTodaysOrders(); const orderToEdit = orders.find(o => o.id === orderId); if (orderToEdit) { editingOrderId = orderToEdit.id; document.getElementById('customer-name').value = orderToEdit.cliente_nombre; document.getElementById('customer-phone').value = orderToEdit.cliente_telefono; currentOrder = JSON.parse(orderToEdit.items_json).map(item => ({...item, orderId: Date.now() + Math.random()})); updateOrderSummary(); historyTabBtn.disabled = true; historyTabBtn.classList.add('opacity-50', 'cursor-not-allowed'); document.querySelector('.tab-button[data-target="catalog-tab-content"]').click(); } }
-    if (e.target.matches('button[data-pay-id]')) { payingOrderId = e.target.dataset.payId; confirmPaymentModal.classList.remove('hidden'); }
-    if (e.target.matches('button[data-reprint-id]')) {
-        const orderId = parseInt(e.target.dataset.reprintId);
+    const button = e.target.closest('button');
+    if (!button) return;
+
+    if (button.dataset.deliverId) { const orderId = button.dataset.deliverId; const success = await window.api.updateOrderStatus({ orderId: orderId, status: 'Entregado' }); if (success) { loadOrderHistory(); } else { alert('Hubo un error al actualizar el pedido.'); } }
+    if (button.dataset.editId) { const orderId = parseInt(button.dataset.editId); const orders = await window.api.getTodaysOrders(); const orderToEdit = orders.find(o => o.id === orderId); if (orderToEdit) { editingOrderId = orderToEdit.id; document.getElementById('customer-name').value = orderToEdit.cliente_nombre; document.getElementById('customer-phone').value = orderToEdit.cliente_telefono; currentOrder = JSON.parse(orderToEdit.items_json).map(item => ({...item, orderId: Date.now() + Math.random()})); updateOrderSummary(); historyTabBtn.disabled = true; historyTabBtn.classList.add('opacity-50', 'cursor-not-allowed'); document.querySelector('.tab-button[data-target="catalog-tab-content"]').click(); } }
+    if (button.dataset.payId) { payingOrderId = button.dataset.payId; confirmPaymentModal.classList.remove('hidden'); }
+    if (button.dataset.reprintId) {
+        const orderId = parseInt(button.dataset.reprintId);
         const orders = await window.api.getTodaysOrders();
         const orderToReprint = orders.find(o => o.id === orderId);
         if (orderToReprint) {
@@ -254,11 +279,30 @@ document.querySelectorAll('input[name="payment-status"]').forEach(radio => { rad
 document.querySelectorAll('.tab-button').forEach(tab => {
   tab.addEventListener('click', () => {
     if (tab.disabled) return;
-    document.querySelectorAll('.tab-button').forEach(item => item.classList.remove('active', 'text-blue-600', 'border-blue-600'));
-    tab.classList.add('active', 'text-blue-600', 'border-blue-600');
-    document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
-    document.getElementById(tab.dataset.target).classList.remove('hidden');
-    if(tab.dataset.target === 'history-tab-content') { loadOrderHistory(); }
+    
+    // Desactiva todas las pestañas principales
+    document.querySelectorAll('.tab-button').forEach(item => {
+        item.classList.remove('active', 'border-blue-600', 'text-blue-600', 'bg-gray-50');
+        item.classList.add('border-transparent', 'text-gray-500');
+    });
+
+    // Activa la pestaña clickeada
+    tab.classList.add('active', 'border-blue-600', 'text-blue-600');
+    tab.classList.remove('border-transparent', 'text-gray-500');
+
+    // Muestra el contenido correcto
+    document.querySelectorAll('.tab-content').forEach(content => {
+      // Usamos .style.display para asegurar que se oculte correctamente
+      if (content.id === tab.dataset.target) {
+        content.classList.remove('hidden');
+      } else {
+        content.classList.add('hidden');
+      }
+    });
+
+    if(tab.dataset.target === 'history-tab-content') { 
+      loadOrderHistory(); 
+    }
   });
 });
 
@@ -319,12 +363,11 @@ function createProductCard(item, type) {
   const card = document.createElement('div');
   card.className = 'product-card bg-white p-3 rounded-lg shadow cursor-pointer hover:shadow-xl transition-shadow text-center';
   card.dataset.name = item.nombre.toLowerCase();
-  let price;
-  if (type === 'pizza') { price = item.precio_mediana; } 
-  else { price = item.precio; }
-  card.innerHTML = `
-    <h3 class="font-bold text-md">${item.nombre}</h3>
-  `;
+  
+  // No mostramos el precio en la tarjeta para una vista más limpia.
+  // El precio se ve al agregar al pedido o en el modal.
+  card.innerHTML = `<h3 class="font-bold text-md">${item.nombre}</h3>`;
+
   if (type === 'pizza') { card.addEventListener('click', () => openPizzaModal(item)); }
   else if (type === 'churrasco') { card.addEventListener('click', () => openNotesModal(item)); }
   else { card.addEventListener('click', () => { const itemData = { orderId: Date.now(), name: item.nombre, price: item.precio, size: null, extras: [], notes: '' }; addToOrder(itemData); }); }
@@ -350,10 +393,18 @@ searchExtrasInput.addEventListener('input', (e) => {
 
 // --- INICIALIZACIÓN ---
 document.addEventListener('DOMContentLoaded', () => {
+  console.log("DOM cargado. Inicializando la aplicación...");
   window.api.getProducts().then((products) => {
-    if (products) {
+    if (products && Object.keys(products).length > 0) {
+      console.log("Productos recibidos:", products);
       allProducts = products;
       displayProducts(products);
+    } else {
+      console.error("No se recibieron productos o están vacíos.");
+      alert("Error: No se pudieron cargar los productos desde la base de datos.");
     }
+  }).catch(error => {
+    console.error("Error al llamar a getProducts:", error);
+    alert("Error crítico al cargar productos. Revise la consola.");
   });
 });
