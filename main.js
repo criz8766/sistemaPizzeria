@@ -1,5 +1,5 @@
 // main.js
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 const PDFDocument = require('pdfkit');
@@ -25,9 +25,7 @@ if (!fs.existsSync(dbPath)) {
   }
 }
 
-const envPath = app.isPackaged
-  ? path.join(process.resourcesPath, '.env')
-  : path.join(__dirname, '.env');
+const envPath = app.isPackaged ? path.join(process.resourcesPath, '.env') : path.join(__dirname, '.env');
 require('dotenv').config({ path: envPath });
 
 const openDb = (readOnly = false) => {
@@ -61,38 +59,24 @@ ipcMain.handle('get-products', async () => {
   finally { db.close(); }
 });
 
-// --> FUNCIÓN DE TICKET MODIFICADA <--
 ipcMain.handle('generate-ticket', async (event, orderData) => {
   const ticketWidth = 204;
   const tempFilePath = path.join(os.tmpdir(), `ticket-${Date.now()}.pdf`);
   const doc = new PDFDocument({ size: [ticketWidth, 842], margins: { top: 15, bottom: 10, left: 5, right: 5 } });
   const stream = fs.createWriteStream(tempFilePath);
   doc.pipe(stream);
-
-  // --- NUEVO: Añadir logo e información de contacto ---
-  const logoPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'assets/logo.jpg')
-    : path.join(__dirname, 'assets/logo.jpg');
-    
+  const logoPath = app.isPackaged ? path.join(process.resourcesPath, 'assets/logo.jpg') : path.join(__dirname, 'assets/logo.jpg');
   if (fs.existsSync(logoPath)) {
-      doc.image(logoPath, {
-          fit: [80, 80], // Tamaño del logo
-          align: 'center',
-          valign: 'center'
-      });
+      doc.image(logoPath, { fit: [80, 80], align: 'center', valign: 'center' });
       doc.moveDown(0.5);
   }
-
   doc.font('Helvetica-Bold').fontSize(14).text('Pizzería Piamonte', { align: 'center' });
   doc.moveDown(0.5);
-
   doc.font('Helvetica').fontSize(9);
   doc.text('Fono: 422228001', { align: 'center' });
   doc.text('WhatsApp: +56946914655', { align: 'center' });
   doc.text('Instagram: @pizzeria_piamonte_chillan', { align: 'center' });
   doc.moveDown(1);
-  // --- FIN DE LA NUEVA SECCIÓN ---
-
   doc.font('Helvetica').fontSize(10);
   doc.text(`Pedido para: ${orderData.customer.name}`, { align: 'center' });
   const orderDate = new Date(orderData.timestamp);
@@ -129,19 +113,14 @@ ipcMain.handle('generate-ticket', async (event, orderData) => {
   const totalProductos = orderData.total;
   const propina = Math.round(totalProductos * 0.1);
   const totalConPropina = totalProductos + propina;
-  
-  // Manteniendo tus últimos cambios para el subtotal
   doc.font('Helvetica-Bold').fontSize(10);
   doc.text(`SUBTOTAL: $${totalProductos.toLocaleString('es-CL')}`, { align: 'center' });
   doc.moveDown(0.5);
-  
   doc.font('Helvetica').fontSize(10);
   doc.text(`Propina Sugerida (10%): $${propina.toLocaleString('es-CL')}`, { align: 'right' });
   doc.moveDown(0.5);
-  
   doc.font('Helvetica-Bold').fontSize(10);
   doc.text(`TOTAL CON PROPINA: $${totalConPropina.toLocaleString('es-CL')}`, { align: 'right' });
-
   doc.end();
   await new Promise(resolve => stream.on('finish', resolve));
   return tempFilePath;
@@ -192,20 +171,17 @@ ipcMain.handle('delete-order', async (event, orderId) => {
             try {
                 await new Promise((res, rej) => db.run('BEGIN TRANSACTION', err => err ? rej(err) : res()));
                 await new Promise((res, rej) => db.run('DELETE FROM pedidos WHERE id = ?', [orderId], err => err ? rej(err) : res()));
-                console.log(`Pedido #${orderId} eliminado.`);
                 const remainingOrders = await new Promise((res, rej) => {
                     const sql = `SELECT * FROM pedidos WHERE date(fecha, 'localtime') = ? ORDER BY id ASC`;
                     db.all(sql, [today], (err, rows) => err ? rej(err) : res(rows));
                 });
                 await new Promise((res, rej) => db.run(`DELETE FROM pedidos WHERE date(fecha, 'localtime') = ?`, [today], err => err ? rej(err) : res()));
                 await new Promise((res, rej) => db.run(`DELETE FROM sqlite_sequence WHERE name='pedidos'`, err => err ? rej(err) : res()));
-                console.log('Contador de pedidos reseteado para la re-inserción.');
                 for (const order of remainingOrders) {
                     const sql = `INSERT INTO pedidos (cliente_nombre, cliente_telefono, total, items_json, fecha, estado, tipo_entrega, hora_entrega, forma_pago, estado_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
                     const params = [order.cliente_nombre, order.cliente_telefono, order.total, order.items_json, order.fecha, order.estado, order.tipo_entrega, order.hora_entrega, order.forma_pago, order.estado_pago];
                     await new Promise((res, rej) => db.run(sql, params, err => err ? rej(err) : res()));
                 }
-                console.log(`${remainingOrders.length} pedidos han sido re-indexados.`);
                 await new Promise((res, rej) => db.run('COMMIT', err => err ? rej(err) : res()));
                 resolve(true);
             } catch (error) {
@@ -259,21 +235,61 @@ async function generateDailyReport(autoSavePath = null) {
 
 ipcMain.handle('generate-report', () => generateDailyReport());
 
-async function sendReportByEmail() {
-    console.log('Iniciando proceso de envío de reporte por correo...');
+// --> FUNCIÓN MODIFICADA: Se separa la lógica de guardado local y envío de email
+async function saveAndSendReport() {
     const today = getLocalDate();
-    const reportFileName = `Reporte-Piamonte-${today}.xlsx`;
-    const reportPath = path.join(os.tmpdir(), reportFileName);
-    const reportResult = await generateDailyReport(reportPath);
-    if (!reportResult.success) { console.log(`No se generó reporte para enviar: ${reportResult.message}`); return; }
-    console.log(`Reporte generado en: ${reportResult.filePath}`);
+    
+    // 1. Definir rutas para el respaldo local
+    const desktopPath = app.getPath('desktop');
+    const reportsFolderPath = path.join(desktopPath, 'reportes');
+    if (!fs.existsSync(reportsFolderPath)) {
+        fs.mkdirSync(reportsFolderPath);
+    }
+    const localReportPath = path.join(reportsFolderPath, `Reporte-Piamonte-${today}.xlsx`);
+
+    // 2. Generar y guardar el reporte localmente SIEMPRE
+    const localReportResult = await generateDailyReport(localReportPath);
+    if (!localReportResult.success) {
+        dialog.showMessageBoxSync({
+            type: 'info',
+            title: 'Sin Reporte',
+            message: 'No se encontraron ventas el día de hoy. No se generó ningún reporte.'
+        });
+        return; // No hay nada más que hacer si no hubo ventas
+    }
+    
+    dialog.showMessageBoxSync({
+        type: 'info',
+        title: 'Respaldo Local Creado',
+        message: `El reporte de ventas se ha guardado en la carpeta "reportes" de tu Escritorio.`
+    });
+
+    // 3. Intentar enviar el reporte por correo
+    if (!process.env.SENDGRID_API_KEY) {
+        console.log('No se encontró API Key de SendGrid. Omitiendo envío de correo.');
+        return;
+    }
+
     const transporter = nodemailer.createTransport({ host: 'smtp.sendgrid.net', port: 587, auth: { user: 'apikey', pass: process.env.SENDGRID_API_KEY } });
     try {
-        await transporter.sendMail({ from: process.env.EMAIL_FROM, to: process.env.EMAIL_TO, subject: `Reporte de Ventas Piamonte - ${today}`, text: 'Adjunto se encuentra el reporte de ventas del día.', attachments: [{ filename: reportFileName, path: reportResult.filePath }] });
+        await transporter.sendMail({ from: process.env.EMAIL_FROM, to: process.env.EMAIL_TO, subject: `Reporte de Ventas Piamonte - ${today}`, text: 'Adjunto se encuentra el reporte de ventas del día.', attachments: [{ filename: `Reporte-Piamonte-${today}.xlsx`, path: localReportPath }] });
         console.log('Correo de reporte enviado exitosamente.');
-        if (fs.existsSync(reportResult.filePath)) fs.unlinkSync(reportResult.filePath);
-    } catch (error) { console.error('Error al enviar el correo:', error); }
+        dialog.showMessageBoxSync({
+            type: 'info',
+            title: 'Reporte Enviado por Correo',
+            message: 'El reporte de ventas también fue enviado exitosamente al correo configurado.'
+        });
+    } catch (error) {
+        console.error('Error al enviar el correo:', error);
+        dialog.showMessageBoxSync({
+            type: 'error',
+            title: 'Error al Enviar Reporte por Correo',
+            message: 'No se pudo enviar el reporte por correo. Por favor, revisa tu conexión a internet y las credenciales.',
+            detail: error.message
+        });
+    }
 }
+
 
 async function clearOrdersTable() {
     console.log('Limpiando y reseteando la tabla de pedidos...');
@@ -282,16 +298,13 @@ async function clearOrdersTable() {
         db.run(sql, [], function(err) { if (err) return reject(err); resolve(this); });
     });
     try {
-        const deleteInfo = await run(`DELETE FROM pedidos`);
-        console.log(`Tabla 'pedidos' limpiada. Filas eliminadas: ${deleteInfo.changes}`);
-        const resetInfo = await run(`DELETE FROM sqlite_sequence WHERE name='pedidos'`);
-        console.log(`Contador de autoincremento para 'pedidos' reseteado.`);
+        await run(`DELETE FROM pedidos`);
+        await run(`DELETE FROM sqlite_sequence WHERE name='pedidos'`);
     } catch (err) {
         console.error('Error durante la limpieza de la tabla:', err.message);
     } finally {
         db.close((err) => {
             if (err) console.error('Error al cerrar la DB después de limpiar:', err.message);
-            else console.log('Conexión de la base de datos (limpieza) cerrada correctamente.');
         });
     }
 }
@@ -332,6 +345,11 @@ ipcMain.handle('update-payment-status', async (event, { orderId, status, payment
 // --- LÓGICA DE LA VENTANA Y CICLO DE VIDA ---
 const createWindow = () => {
   const mainWindow = new BrowserWindow({ width: 1280, height: 800, webPreferences: { preload: path.join(__dirname, 'preload.js') }, frame: false, autoHideMenuBar: true });
+  
+  if (app.isPackaged) {
+    Menu.setApplicationMenu(null);
+  }
+
   mainWindow.webContents.session.clearCache().then(() => { mainWindow.loadFile('index.html'); });
 };
 
@@ -343,7 +361,8 @@ app.whenReady().then(createWindow);
 
 app.on('window-all-closed', async () => {
   if (process.platform !== 'darwin') {
-    await sendReportByEmail();
+    // --> LLAMADA A LA NUEVA FUNCIÓN CENTRALIZADA
+    await saveAndSendReport();
     await clearOrdersTable();
     app.quit();
   }
