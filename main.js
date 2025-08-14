@@ -12,7 +12,9 @@ const nodemailer = require('nodemailer');
 // --- CONFIGURACIÓN DE RUTAS ---
 const userDataPath = app.getPath('userData');
 const dbPath = path.join(userDataPath, 'piamonte.db');
-const sourceDbPath = app.isPackaged ? path.join(process.resourcesPath, 'piamonte.db') : path.join(__dirname, 'piamonte.db');
+const sourceDbPath = app.isPackaged
+  ? path.join(process.resourcesPath, 'piamonte.db')
+  : path.join(__dirname, 'piamonte.db');
 
 if (!fs.existsSync(dbPath)) {
   try {
@@ -72,9 +74,6 @@ ipcMain.handle('generate-ticket', async (event, orderData) => {
   const timePart = orderDate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false });
   const formattedDateTime = `${datePart}, ${timePart}`;
   doc.text(formattedDateTime, { align: 'center' });
-  
-  // --> LÍNEA ELIMINADA: Ya no se muestra el tipo de pedido
-  
   doc.moveDown(0.5);
   if (orderData.delivery.type === 'demora' && orderData.delivery.time) {
     doc.font('Helvetica-Bold').fontSize(10).text(`Hora estimada: ${orderData.delivery.time}`, { align: 'center' });
@@ -104,13 +103,13 @@ ipcMain.handle('generate-ticket', async (event, orderData) => {
   const totalProductos = orderData.total;
   const propina = Math.round(totalProductos * 0.1);
   const totalConPropina = totalProductos + propina;
-  doc.font('Helvetica-Bold').fontSize(12);
-  doc.text(`TOTAL PRODUCTOS: $${totalProductos.toLocaleString('es-CL')}`, { align: 'right' });
+  doc.font('Helvetica-Bold').fontSize(10);
+  doc.text(`SUBTOTAL: $${totalProductos.toLocaleString('es-CL')}`, { align: 'center' });
   doc.moveDown(0.5);
   doc.font('Helvetica').fontSize(10);
   doc.text(`Propina Sugerida (10%): $${propina.toLocaleString('es-CL')}`, { align: 'right' });
   doc.moveDown(0.5);
-  doc.font('Helvetica-Bold').fontSize(14);
+  doc.font('Helvetica-Bold').fontSize(10);
   doc.text(`TOTAL CON PROPINA: $${totalConPropina.toLocaleString('es-CL')}`, { align: 'right' });
   doc.end();
   await new Promise(resolve => stream.on('finish', resolve));
@@ -124,7 +123,6 @@ ipcMain.handle('confirm-print', async (event, {filePath, orderData}) => {
     db.run(sql, params, function(err) { if (err) reject(err); else resolve(this); });
   });
   try {
-    // --> CORREGIDO: Se elimina `tipo_pedido` de las consultas
     if (orderData.id) {
       const sql = `UPDATE pedidos SET cliente_nombre = ?, cliente_telefono = ?, total = ?, items_json = ?, fecha = ?, tipo_entrega = ?, hora_entrega = ?, forma_pago = ?, estado_pago = ? WHERE id = ?`;
       await runDb(sql, [orderData.customer.name, orderData.customer.phone, orderData.total, itemsJson, orderData.timestamp, orderData.delivery.type, orderData.delivery.time, orderData.payment.method, orderData.payment.status, orderData.id]);
@@ -141,6 +139,75 @@ ipcMain.handle('confirm-print', async (event, {filePath, orderData}) => {
   finally { fs.unlinkSync(filePath); }
 });
 
+ipcMain.handle('update-order', async (event, orderData) => {
+    const db = openDb();
+    const itemsJson = JSON.stringify(orderData.items);
+    const sql = `UPDATE pedidos SET cliente_nombre = ?, cliente_telefono = ?, total = ?, items_json = ?, fecha = ?, tipo_entrega = ?, hora_entrega = ?, forma_pago = ?, estado_pago = ? WHERE id = ?`;
+    const params = [ orderData.customer.name, orderData.customer.phone, orderData.total, itemsJson, orderData.timestamp, orderData.delivery.type, orderData.delivery.time, orderData.payment.method, orderData.payment.status, orderData.id ];
+    return new Promise((resolve) => {
+        db.run(sql, params, function (err) {
+            if (err) { console.error("Error al actualizar pedido:", err.message); resolve(false); } 
+            else { console.log(`Pedido #${orderData.id} actualizado correctamente.`); resolve(true); }
+        });
+        db.close();
+    });
+});
+
+// --> CORREGIDO: Lógica completa para eliminar y reordenar los IDs
+ipcMain.handle('delete-order', async (event, orderId) => {
+    const db = openDb();
+    const today = getLocalDate();
+
+    // Envolvemos todo en una promesa para manejar el flujo asíncrono
+    return new Promise((resolve) => {
+        // `serialize` asegura que los comandos se ejecuten uno tras otro
+        db.serialize(async () => {
+            try {
+                // 1. Iniciar una transacción
+                await new Promise((res, rej) => db.run('BEGIN TRANSACTION', err => err ? rej(err) : res()));
+
+                // 2. Eliminar el pedido solicitado
+                await new Promise((res, rej) => db.run('DELETE FROM pedidos WHERE id = ?', [orderId], err => err ? rej(err) : res()));
+                console.log(`Pedido #${orderId} eliminado.`);
+
+                // 3. Obtener todos los pedidos restantes del día, ordenados por ID
+                const remainingOrders = await new Promise((res, rej) => {
+                    const sql = `SELECT * FROM pedidos WHERE date(fecha, 'localtime') = ? ORDER BY id ASC`;
+                    db.all(sql, [today], (err, rows) => err ? rej(err) : res(rows));
+                });
+                
+                // 4. Borrar todos esos pedidos para re-insertarlos con IDs correctos
+                await new Promise((res, rej) => db.run(`DELETE FROM pedidos WHERE date(fecha, 'localtime') = ?`, [today], err => err ? rej(err) : res()));
+
+                // 5. Resetear el contador de autoincremento para empezar desde 0 (o el ID más bajo del día si hay de otros días)
+                // Esta es una forma segura de manejar el reseteo
+                await new Promise((res, rej) => db.run(`DELETE FROM sqlite_sequence WHERE name='pedidos'`, err => err ? rej(err) : res()));
+                console.log('Contador de pedidos reseteado para la re-inserción.');
+
+                // 6. Re-insertar los pedidos con IDs secuenciales
+                for (const order of remainingOrders) {
+                    const sql = `INSERT INTO pedidos (cliente_nombre, cliente_telefono, total, items_json, fecha, estado, tipo_entrega, hora_entrega, forma_pago, estado_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                    const params = [order.cliente_nombre, order.cliente_telefono, order.total, order.items_json, order.fecha, order.estado, order.tipo_entrega, order.hora_entrega, order.forma_pago, order.estado_pago];
+                    await new Promise((res, rej) => db.run(sql, params, err => err ? rej(err) : res()));
+                }
+                console.log(`${remainingOrders.length} pedidos han sido re-indexados.`);
+
+                // 7. Finalizar la transacción
+                await new Promise((res, rej) => db.run('COMMIT', err => err ? rej(err) : res()));
+                
+                resolve(true);
+
+            } catch (error) {
+                console.error("Error en la transacción de borrado, revirtiendo cambios:", error);
+                await new Promise((res, rej) => db.run('ROLLBACK', err => err ? rej(err) : res()));
+                resolve(false);
+            } finally {
+                db.close();
+            }
+        });
+    });
+});
+
 ipcMain.handle('cancel-print', (event, filePath) => {
   try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (error) { console.error("No se pudo borrar el archivo temporal:", error); }
 });
@@ -148,7 +215,6 @@ ipcMain.handle('cancel-print', (event, filePath) => {
 async function generateDailyReport(autoSavePath = null) {
   const db = openDb(true);
   const today = getLocalDate();
-  // --> CORREGIDO: Se elimina `tipo_pedido` del reporte
   const sql = `SELECT * FROM pedidos WHERE date(fecha, 'localtime') = ?`;
   const orders = await new Promise((resolve, reject) => { db.all(sql, [today], (err, rows) => { if (err) reject(err); else resolve(rows); }); });
   db.close();

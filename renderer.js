@@ -7,12 +7,14 @@ let currentPizzaConfig = {};
 let currentNoteItem = {};
 let editingOrderId = null;
 let payingOrderId = null;
+let orderToDeleteId = null;
 
 // --- ELEMENTOS DEL DOM ---
 const pizzaModal = document.getElementById('pizza-modal');
 const previewModal = document.getElementById('preview-modal');
 const notesModal = document.getElementById('notes-modal');
 const confirmPaymentModal = document.getElementById('confirm-payment-modal');
+const confirmDeleteModal = document.getElementById('confirm-delete-modal');
 const orderSummaryEl = document.getElementById('order-summary');
 const totalPriceEl = document.getElementById('total-price');
 const pizzasContainer = document.getElementById('pizzas-tab');
@@ -24,6 +26,7 @@ const hnhOptions = document.getElementById('half-options');
 const hnhSelect1 = document.getElementById('half-1');
 const hnhSelect2 = document.getElementById('half-2');
 const finalizeOrderBtn = document.getElementById('finalize-order-btn');
+const updateOrderBtn = document.getElementById('update-order-btn');
 const reportBtn = document.getElementById('report-btn');
 const historyListEl = document.getElementById('history-list');
 const historyTabBtn = document.querySelector('.tab-button[data-target="history-tab-content"]');
@@ -35,7 +38,6 @@ const searchExtrasInput = document.getElementById('search-extras');
 const alertModal = document.getElementById('alert-modal');
 const alertModalMessage = document.getElementById('alert-modal-message');
 const alertModalCloseBtn = document.getElementById('alert-modal-close-btn');
-
 const customPizzaModal = document.getElementById('custom-pizza-modal');
 const customSizeOptions = document.getElementById('custom-size-options');
 const customPizzaIngredients = document.getElementById('custom-pizza-ingredients');
@@ -43,7 +45,6 @@ const customPizzaPriceInput = document.getElementById('custom-pizza-price-input'
 const customCancelButton = document.getElementById('custom-cancel-button');
 const customAddToOrderButton = document.getElementById('custom-add-to-order-button');
 let customPizzaSize = 'mediana';
-
 
 // --- LÓGICA DE ALERTAS ---
 function showAlert(message) {
@@ -58,6 +59,18 @@ function showPrintPreview(filePath) {
   const pdfPreview = document.getElementById('pdf-preview');
   pdfPreview.src = `${filePath}?t=${new Date().getTime()}`;
   previewModal.classList.remove('hidden');
+}
+
+function resetOrderState() {
+    currentOrder = [];
+    editingOrderId = null;
+    document.getElementById('customer-name').value = '';
+    document.getElementById('customer-phone').value = '';
+    document.getElementById('delivery-delay').checked = true;
+    document.getElementById('status-unpaid').checked = true;
+    updateOrderBtn.classList.add('hidden');
+    finalizeOrderBtn.classList.remove('hidden');
+    updateOrderSummary();
 }
 
 // --- LÓGICA DE HISTORIAL ---
@@ -92,6 +105,7 @@ async function loadOrderHistory() {
                     ${items.map(item => `<div>- ${item.name} ${item.notes ? `<span class="text-gray-500">(${item.notes})</span>` : ''}</div>`).join('')}
                 </div>
                 <div class="text-right mt-3 space-x-2">
+                    <button class="bg-red-600 text-white text-xs px-3 py-1 rounded hover:bg-red-700" data-delete-id="${order.id}">Eliminar</button>
                     <button class="bg-gray-500 text-white text-xs px-3 py-1 rounded hover:bg-gray-600" data-reprint-id="${order.id}">Reimprimir</button>
                     <button class="bg-yellow-500 text-white text-xs px-3 py-1 rounded hover:bg-yellow-600 ${isDelivered ? 'hidden' : ''}" data-edit-id="${order.id}">Editar</button>
                     <button class="bg-green-500 text-white text-xs px-3 py-1 rounded hover:bg-green-600 disabled:bg-gray-400" data-pay-id="${order.id}" ${isPaid ? 'disabled' : ''}>Marcar Pagado</button>
@@ -113,7 +127,7 @@ function updateOrderSummary() {
   orderSummaryEl.innerHTML = '';
   if (currentOrder.length === 0) {
     orderSummaryEl.innerHTML = '<p class="text-center text-gray-500 py-8">El pedido está vacío</p>';
-    editingOrderId = null;
+    if (editingOrderId) resetOrderState();
     historyTabBtn.disabled = false;
     historyTabBtn.classList.remove('opacity-50', 'cursor-not-allowed');
   } else {
@@ -175,7 +189,6 @@ function updateModalUI() {
     const hnhSection = document.getElementById('half-and-half-section');
     const isCalzone = currentPizzaConfig.basePizza.nombre.toLowerCase() === 'calzone';
     hnhSection.classList.toggle('hidden', isCalzone || !['mediana', 'xl'].includes(size));
-    
     if (isCalzone || !['mediana', 'xl'].includes(size)) {
       hnhCheckbox.checked = false;
       hnhOptions.classList.add('hidden');
@@ -232,50 +245,68 @@ function openCustomPizzaModal() {
     customPizzaIngredients.focus();
 }
 
+function collectOrderData() {
+    const customerName = document.getElementById('customer-name').value.trim();
+    if (currentOrder.length === 0) { showAlert('No se puede procesar un pedido vacío.'); return null; }
+    if (!customerName) { showAlert('Por favor, ingrese el nombre del cliente.'); return null; }
+    const deliveryType = document.querySelector('input[name="delivery-type"]:checked').value;
+    let deliveryTime;
+    if (deliveryType === 'demora') {
+        const minutes = parseInt(document.getElementById('delay-minutes').value) || 0;
+        const deliveryDate = new Date(Date.now() + minutes * 60000);
+        deliveryTime = deliveryDate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false });
+    } else {
+        deliveryTime = document.getElementById('scheduled-time').value;
+        if(!deliveryTime) { showAlert('Por favor, especifique una hora de entrega.'); return null; }
+    }
+    const paymentStatus = document.querySelector('input[name="payment-status"]:checked').value;
+    let paymentMethod = null;
+    if (paymentStatus === 'Pagado') {
+        paymentMethod = paymentMethodSelect.value;
+        if (paymentMethod === 'otra') {
+            const otherPayment = document.getElementById('other-payment-method').value.trim();
+            if (!otherPayment) { showAlert('Por favor, especifique la otra forma de pago.'); return null; }
+            paymentMethod = otherPayment;
+        }
+    }
+    return { id: editingOrderId, customer: { name: customerName, phone: document.getElementById('customer-phone').value.trim() }, total: currentOrder.reduce((sum, item) => sum + item.price, 0), items: currentOrder, timestamp: new Date().toISOString(), delivery: { type: deliveryType, time: deliveryTime }, payment: { status: paymentStatus, method: paymentMethod } };
+}
+
 // --- EVENT LISTENERS ---
-alertModalCloseBtn.addEventListener('click', () => {
-    alertModal.classList.add('hidden');
-});
+alertModalCloseBtn.addEventListener('click', () => { alertModal.classList.add('hidden'); });
 
 finalizeOrderBtn.addEventListener('click', async () => {
-  const customerName = document.getElementById('customer-name').value.trim();
-  if (currentOrder.length === 0) { showAlert('No se puede finalizar un pedido vacío.'); return; }
-  if (!customerName) { showAlert('Por favor, ingrese el nombre del cliente.'); return; }
-  const deliveryType = document.querySelector('input[name="delivery-type"]:checked').value;
-  let deliveryTime;
-  if (deliveryType === 'demora') { const minutes = parseInt(document.getElementById('delay-minutes').value) || 0; const deliveryDate = new Date(Date.now() + minutes * 60000); deliveryTime = deliveryDate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false }); } else { deliveryTime = document.getElementById('scheduled-time').value; if(!deliveryTime) { showAlert('Por favor, especifique una hora de entrega.'); return; } }
-  const paymentStatus = document.querySelector('input[name="payment-status"]:checked').value;
-  let paymentMethod = null;
-  if (paymentStatus === 'Pagado') {
-      paymentMethod = paymentMethodSelect.value;
-      if (paymentMethod === 'otra') {
-          const otherPayment = document.getElementById('other-payment-method').value.trim();
-          if (!otherPayment) { showAlert('Por favor, especifique la otra forma de pago.'); return; }
-          paymentMethod = otherPayment;
-      }
-  }
-  // --> LÍNEA ELIMINADA: Ya no se lee el `order-type`
-  fullOrder = { id: editingOrderId, customer: { name: customerName, phone: document.getElementById('customer-phone').value.trim() }, total: currentOrder.reduce((sum, item) => sum + item.price, 0), items: currentOrder, timestamp: new Date().toISOString(), delivery: { type: deliveryType, time: deliveryTime }, payment: { status: paymentStatus, method: paymentMethod } };
-  try {
-    const filePath = await window.api.generateTicket(fullOrder);
-    if (filePath) { showPrintPreview(filePath); }
-    else { showAlert("Hubo un error al generar el ticket."); }
-  } catch (error) {
-    console.error("Error generando ticket:", error);
-    showAlert("Error crítico al generar el ticket. Revise la consola.");
-  }
+    fullOrder = collectOrderData();
+    if (!fullOrder) return;
+    try {
+        const filePath = await window.api.generateTicket(fullOrder);
+        if (filePath) showPrintPreview(filePath);
+        else showAlert("Hubo un error al generar el ticket.");
+    } catch (error) { console.error("Error generando ticket:", error); showAlert("Error crítico al generar el ticket. Revise la consola."); }
+});
+
+updateOrderBtn.addEventListener('click', async () => {
+    const updatedOrderData = collectOrderData();
+    if (!updatedOrderData) return;
+    try {
+        const success = await window.api.updateOrder(updatedOrderData);
+        if (success) {
+            showAlert('Pedido actualizado correctamente.');
+            resetOrderState();
+            document.querySelector('.tab-button[data-target="history-tab-content"]').click();
+        } else {
+            showAlert('Hubo un error al actualizar el pedido.');
+        }
+    } catch (error) { console.error("Error al actualizar pedido:", error); showAlert("Error crítico al actualizar el pedido. Revise la consola."); }
 });
 
 document.getElementById('preview-cancel-btn').addEventListener('click', () => { window.api.cancelPrint(tempPdfPath); previewModal.classList.add('hidden'); });
+
 document.getElementById('preview-confirm-btn').addEventListener('click', async () => {
   const printResult = await window.api.confirmPrint({ filePath: tempPdfPath, orderData: fullOrder });
   previewModal.classList.add('hidden');
   if (printResult.success) {
-    currentOrder = [];
-    editingOrderId = null;
-    document.getElementById('customer-name').value = '';
-    document.getElementById('customer-phone').value = '';
-    updateOrderSummary();
+    resetOrderState();
     document.querySelector('.tab-button[data-target="catalog-tab-content"]').click();
     searchInput.value = '';
     searchInput.dispatchEvent(new Event('input'));
@@ -290,7 +321,23 @@ historyListEl.addEventListener('click', async (e) => {
     const button = e.target.closest('button');
     if (!button) return;
     if (button.dataset.deliverId) { const orderId = button.dataset.deliverId; const success = await window.api.updateOrderStatus({ orderId: orderId, status: 'Entregado' }); if (success) { loadOrderHistory(); } else { showAlert('Hubo un error al actualizar el pedido.'); } }
-    if (button.dataset.editId) { const orderId = parseInt(button.dataset.editId); const orders = await window.api.getTodaysOrders(); const orderToEdit = orders.find(o => o.id === orderId); if (orderToEdit) { editingOrderId = orderToEdit.id; document.getElementById('customer-name').value = orderToEdit.cliente_nombre; document.getElementById('customer-phone').value = orderToEdit.cliente_telefono; currentOrder = JSON.parse(orderToEdit.items_json).map(item => ({...item, orderId: Date.now() + Math.random()})); updateOrderSummary(); historyTabBtn.disabled = true; historyTabBtn.classList.add('opacity-50', 'cursor-not-allowed'); document.querySelector('.tab-button[data-target="catalog-tab-content"]').click(); } }
+    if (button.dataset.editId) {
+        const orderId = parseInt(button.dataset.editId);
+        const orders = await window.api.getTodaysOrders();
+        const orderToEdit = orders.find(o => o.id === orderId);
+        if (orderToEdit) {
+            editingOrderId = orderToEdit.id;
+            document.getElementById('customer-name').value = orderToEdit.cliente_nombre;
+            document.getElementById('customer-phone').value = orderToEdit.cliente_telefono;
+            currentOrder = JSON.parse(orderToEdit.items_json).map(item => ({...item, orderId: Date.now() + Math.random()}));
+            updateOrderSummary();
+            historyTabBtn.disabled = true;
+            historyTabBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            finalizeOrderBtn.classList.add('hidden');
+            updateOrderBtn.classList.remove('hidden');
+            document.querySelector('.tab-button[data-target="catalog-tab-content"]').click();
+        }
+    }
     if (button.dataset.payId) { payingOrderId = button.dataset.payId; confirmPaymentModal.classList.remove('hidden'); }
     if (button.dataset.reprintId) {
         const orderId = parseInt(button.dataset.reprintId);
@@ -299,9 +346,33 @@ historyListEl.addEventListener('click', async (e) => {
         if (orderToReprint) {
             fullOrder = { id: orderToReprint.id, customer: { name: orderToReprint.cliente_nombre, phone: orderToReprint.cliente_telefono }, total: orderToReprint.total, items: JSON.parse(orderToReprint.items_json), timestamp: orderToReprint.fecha, delivery: { type: orderToReprint.tipo_entrega, time: orderToReprint.hora_entrega }, payment: { status: orderToReprint.estado_pago, method: orderToReprint.forma_pago } };
             const filePath = await window.api.generateTicket(fullOrder);
-            if (filePath) { showPrintPreview(filePath); }
-            else { showAlert("Hubo un error al generar el ticket de reimpresión."); }
+            if (filePath) showPrintPreview(filePath);
+            else showAlert("Hubo un error al generar el ticket de reimpresión.");
         }
+    }
+    if (button.dataset.deleteId) {
+        orderToDeleteId = parseInt(button.dataset.deleteId);
+        document.getElementById('confirm-delete-message').textContent = `¿Estás seguro de que deseas eliminar el Pedido #${orderToDeleteId}? Esta acción no se puede deshacer.`;
+        confirmDeleteModal.classList.remove('hidden');
+    }
+});
+
+document.getElementById('delete-cancel-btn').addEventListener('click', () => {
+    confirmDeleteModal.classList.add('hidden');
+    orderToDeleteId = null;
+});
+
+document.getElementById('delete-confirm-btn').addEventListener('click', async () => {
+    if (orderToDeleteId) {
+        const success = await window.api.deleteOrder(orderToDeleteId);
+        if (success) {
+            showAlert(`Pedido #${orderToDeleteId} eliminado correctamente.`);
+            loadOrderHistory();
+        } else {
+            showAlert('Error al eliminar el pedido.');
+        }
+        confirmDeleteModal.classList.add('hidden');
+        orderToDeleteId = null;
     }
 });
 
