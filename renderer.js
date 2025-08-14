@@ -32,23 +32,31 @@ const paymentMethodSelect = document.getElementById('payment-method');
 const otherPaymentWrapper = document.getElementById('other-payment-wrapper');
 const searchInput = document.getElementById('search-products');
 const searchExtrasInput = document.getElementById('search-extras');
-// NUEVO: Elementos del modal de alerta
 const alertModal = document.getElementById('alert-modal');
 const alertModalMessage = document.getElementById('alert-modal-message');
 const alertModalCloseBtn = document.getElementById('alert-modal-close-btn');
+
+// --> NUEVO: Elementos del DOM para pizza personalizada
+const customPizzaModal = document.getElementById('custom-pizza-modal');
+const customSizeOptions = document.getElementById('custom-size-options');
+const customPizzaIngredients = document.getElementById('custom-pizza-ingredients');
+const customPizzaPriceInput = document.getElementById('custom-pizza-price-input');
+const customCancelButton = document.getElementById('custom-cancel-button');
+const customAddToOrderButton = document.getElementById('custom-add-to-order-button');
+let customPizzaSize = 'mediana'; // Variable para guardar el tamaño seleccionado
+
 
 // --- LÓGICA DE ALERTAS ---
 function showAlert(message) {
     alertModalMessage.textContent = message;
     alertModal.classList.remove('hidden');
-    alertModalCloseBtn.focus(); // Poner foco en el botón para poder cerrar con Enter
+    alertModalCloseBtn.focus();
 }
 
 // --- LÓGICA DE VISTA PREVIA ---
 function showPrintPreview(filePath) {
   tempPdfPath = filePath;
   const pdfPreview = document.getElementById('pdf-preview');
-  // Añadimos un timestamp para forzar la recarga del PDF y evitar problemas de caché
   pdfPreview.src = `${filePath}?t=${new Date().getTime()}`;
   previewModal.classList.remove('hidden');
 }
@@ -106,7 +114,6 @@ function updateOrderSummary() {
   orderSummaryEl.innerHTML = '';
   if (currentOrder.length === 0) {
     orderSummaryEl.innerHTML = '<p class="text-center text-gray-500 py-8">El pedido está vacío</p>';
-    // Si el pedido se vacía, se puede volver a habilitar la pestaña de historial
     editingOrderId = null;
     historyTabBtn.disabled = false;
     historyTabBtn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -146,7 +153,6 @@ function openPizzaModal(pizza) {
     });
     hnhSelect1.innerHTML = '';
     hnhSelect2.innerHTML = '';
-    // MODIFICACIÓN 1: Filtrar la pizza "Calzone" de las opciones de mitad y mitad
     const availablePizzasForHalves = allProducts.pizzas.filter(p => p.nombre.toLowerCase() !== 'calzone');
     availablePizzasForHalves.forEach(p => { 
         hnhSelect1.innerHTML += `<option value="${p.id}">${p.nombre}</option>`; 
@@ -164,11 +170,10 @@ function openPizzaModal(pizza) {
 
 function updateModalUI() {
     const size = currentPizzaConfig.size;
-    document.querySelectorAll('.size-button').forEach(btn => {
+    document.querySelectorAll('#size-options .size-button').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.size === size);
     });
     const hnhSection = document.getElementById('half-and-half-section');
-    // MODIFICACIÓN 2: Ocultar la opción de mitad y mitad si la pizza es Calzone
     const isCalzone = currentPizzaConfig.basePizza.nombre.toLowerCase() === 'calzone';
     hnhSection.classList.toggle('hidden', isCalzone || !['mediana', 'xl'].includes(size));
     
@@ -217,8 +222,19 @@ function openNotesModal(item) {
     notesModal.classList.remove('hidden');
 }
 
+// --> NUEVO: Función para abrir y resetear el modal de pizza personalizada
+function openCustomPizzaModal() {
+    customPizzaIngredients.value = '';
+    customPizzaPriceInput.value = '';
+    customPizzaSize = 'mediana';
+    customSizeOptions.querySelectorAll('.size-button').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.size === 'mediana');
+    });
+    customPizzaModal.classList.remove('hidden');
+    customPizzaIngredients.focus();
+}
+
 // --- EVENT LISTENERS ---
-// NUEVO: Event listener para el botón de cerrar del modal de alerta
 alertModalCloseBtn.addEventListener('click', () => {
     alertModal.classList.add('hidden');
 });
@@ -256,16 +272,14 @@ document.getElementById('preview-confirm-btn').addEventListener('click', async (
   const printResult = await window.api.confirmPrint({ filePath: tempPdfPath, orderData: fullOrder });
   previewModal.classList.add('hidden');
   if (printResult.success) {
-    console.log(`Pedido procesado y guardado.`);
     currentOrder = [];
     editingOrderId = null;
     document.getElementById('customer-name').value = '';
     document.getElementById('customer-phone').value = '';
     updateOrderSummary();
-    // Vuelve a la pestaña de catálogo y resetea los filtros.
     document.querySelector('.tab-button[data-target="catalog-tab-content"]').click();
     searchInput.value = '';
-    searchInput.dispatchEvent(new Event('input')); // Para que se aplique el filtro vacío
+    searchInput.dispatchEvent(new Event('input'));
   } else {
     showAlert(`Error al imprimir: ${printResult.error}\nRevise la consola para más detalles.`);
   }
@@ -276,7 +290,6 @@ reportBtn.addEventListener('click', async () => { const result = await window.ap
 historyListEl.addEventListener('click', async (e) => {
     const button = e.target.closest('button');
     if (!button) return;
-
     if (button.dataset.deliverId) { const orderId = button.dataset.deliverId; const success = await window.api.updateOrderStatus({ orderId: orderId, status: 'Entregado' }); if (success) { loadOrderHistory(); } else { showAlert('Hubo un error al actualizar el pedido.'); } }
     if (button.dataset.editId) { const orderId = parseInt(button.dataset.editId); const orders = await window.api.getTodaysOrders(); const orderToEdit = orders.find(o => o.id === orderId); if (orderToEdit) { editingOrderId = orderToEdit.id; document.getElementById('customer-name').value = orderToEdit.cliente_nombre; document.getElementById('customer-phone').value = orderToEdit.cliente_telefono; currentOrder = JSON.parse(orderToEdit.items_json).map(item => ({...item, orderId: Date.now() + Math.random()})); updateOrderSummary(); historyTabBtn.disabled = true; historyTabBtn.classList.add('opacity-50', 'cursor-not-allowed'); document.querySelector('.tab-button[data-target="catalog-tab-content"]').click(); } }
     if (button.dataset.payId) { payingOrderId = button.dataset.payId; confirmPaymentModal.classList.remove('hidden'); }
@@ -297,46 +310,8 @@ orderSummaryEl.addEventListener('click', (e) => { if (e.target.matches('.remove-
 document.querySelectorAll('input[name="delivery-type"]').forEach(radio => { radio.addEventListener('change', (e) => { if(e.target.value === 'demora') { document.getElementById('delivery-delay-input').classList.remove('hidden'); document.getElementById('delivery-scheduled-input').classList.add('hidden'); } else { document.getElementById('delivery-delay-input').classList.add('hidden'); document.getElementById('delivery-scheduled-input').classList.remove('hidden'); } }); });
 paymentMethodSelect.addEventListener('change', () => { otherPaymentWrapper.classList.toggle('hidden', paymentMethodSelect.value !== 'otra'); });
 document.querySelectorAll('input[name="payment-status"]').forEach(radio => { radio.addEventListener('change', (e) => { paymentMethodWrapper.classList.toggle('hidden', e.target.value !== 'Pagado'); }); });
-
-document.querySelectorAll('.tab-button').forEach(tab => {
-  tab.addEventListener('click', () => {
-    if (tab.disabled) return;
-    
-    // Desactiva todas las pestañas principales
-    document.querySelectorAll('.tab-button').forEach(item => {
-        item.classList.remove('active', 'border-blue-600', 'text-blue-600', 'bg-gray-50');
-        item.classList.add('border-transparent', 'text-gray-500');
-    });
-
-    // Activa la pestaña clickeada
-    tab.classList.add('active', 'border-blue-600', 'text-blue-600');
-    tab.classList.remove('border-transparent', 'text-gray-500');
-
-    // Muestra el contenido correcto
-    document.querySelectorAll('.tab-content').forEach(content => {
-      // Usamos .style.display para asegurar que se oculte correctamente
-      if (content.id === tab.dataset.target) {
-        content.classList.remove('hidden');
-      } else {
-        content.classList.add('hidden');
-      }
-    });
-
-    if(tab.dataset.target === 'history-tab-content') {
-      loadOrderHistory();
-    }
-  });
-});
-
-document.querySelectorAll('.sub-tab-button').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.sub-tab-button').forEach(item => item.classList.remove('active', 'bg-white', 'shadow-sm'));
-    tab.classList.add('active', 'bg-white', 'shadow-sm');
-    document.querySelectorAll('.sub-tab-content').forEach(content => content.classList.add('hidden'));
-    document.getElementById(tab.dataset.target).classList.remove('hidden');
-  });
-});
-
+document.querySelectorAll('.tab-button').forEach(tab => { tab.addEventListener('click', () => { if (tab.disabled) return; document.querySelectorAll('.tab-button').forEach(item => { item.classList.remove('active', 'border-blue-600', 'text-blue-600', 'bg-gray-50'); item.classList.add('border-transparent', 'text-gray-500'); }); tab.classList.add('active', 'border-blue-600', 'text-blue-600'); tab.classList.remove('border-transparent', 'text-gray-500'); document.querySelectorAll('.tab-content').forEach(content => { if (content.id === tab.dataset.target) { content.classList.remove('hidden'); } else { content.classList.add('hidden'); } }); if(tab.dataset.target === 'history-tab-content') { loadOrderHistory(); } }); });
+document.querySelectorAll('.sub-tab-button').forEach(tab => { tab.addEventListener('click', () => { document.querySelectorAll('.sub-tab-button').forEach(item => item.classList.remove('active', 'bg-white', 'shadow-sm')); tab.classList.add('active', 'bg-white', 'shadow-sm'); document.querySelectorAll('.sub-tab-content').forEach(content => content.classList.add('hidden')); document.getElementById(tab.dataset.target).classList.remove('hidden'); }); });
 addToOrderBtn.addEventListener('click', () => { let itemName; if (hnhCheckbox.checked && ['mediana', 'xl'].includes(currentPizzaConfig.size)) { const pizza1Name = hnhSelect1.options[hnhSelect1.selectedIndex].text.toLowerCase(); const pizza2Name = hnhSelect2.options[hnhSelect2.selectedIndex].text.toLowerCase(); baseName = `mitad ${pizza1Name}/mitad ${pizza2Name}`; } else { baseName = currentPizzaConfig.basePizza.nombre; } const sizePrefix = {xl: 'XL - ',mediana: 'M - ',chica: 'CH - '}[currentPizzaConfig.size] || ''; itemName = sizePrefix + baseName; const finalItem = { orderId: Date.now(), name: itemName, size: currentPizzaConfig.size, extras: currentPizzaConfig.extras, price: currentPizzaConfig.price, notes: document.getElementById('pizza-notes').value.trim() }; addToOrder(finalItem); pizzaModal.classList.add('hidden'); });
 document.getElementById('size-options').addEventListener('click', (e) => { if (e.target.matches('.size-button')) { currentPizzaConfig.size = e.target.dataset.size; updateModalUI(); } });
 document.getElementById('extras-container').addEventListener('input', (e) => { if(e.target.matches('.extra-checkbox')) { updateModalPrice(); } });
@@ -348,24 +323,44 @@ document.getElementById('notes-cancel-btn').addEventListener('click', () => { no
 document.getElementById('notes-confirm-btn').addEventListener('click', () => { const notes = document.getElementById('product-notes').value.trim(); const itemData = { orderId: Date.now(), name: currentNoteItem.nombre, price: currentNoteItem.precio, size: null, extras: [], notes: notes }; addToOrder(itemData); notesModal.classList.add('hidden'); });
 document.getElementById('history-payment-method').addEventListener('change', (e) => { document.getElementById('history-other-payment-wrapper').classList.toggle('hidden', e.target.value !== 'otra'); });
 document.getElementById('payment-cancel-btn').addEventListener('click', () => { confirmPaymentModal.classList.add('hidden'); payingOrderId = null; });
-document.getElementById('payment-confirm-btn').addEventListener('click', async () => {
-    let paymentMethod = document.getElementById('history-payment-method').value;
-    if (paymentMethod === 'otra') {
-        const otherPayment = document.getElementById('history-other-payment-method').value.trim();
-        if (!otherPayment) { showAlert('Por favor, especifique la otra forma de pago.'); return; }
-        paymentMethod = otherPayment;
+document.getElementById('payment-confirm-btn').addEventListener('click', async () => { let paymentMethod = document.getElementById('history-payment-method').value; if (paymentMethod === 'otra') { const otherPayment = document.getElementById('history-other-payment-method').value.trim(); if (!otherPayment) { showAlert('Por favor, especifique la otra forma de pago.'); return; } paymentMethod = otherPayment; } const success = await window.api.updatePaymentStatus({ orderId: payingOrderId, status: 'Pagado', paymentMethod: paymentMethod }); if (success) { loadOrderHistory(); } else { showAlert('Hubo un error al actualizar el estado de pago.'); } confirmPaymentModal.classList.add('hidden'); payingOrderId = null; });
+
+// --> NUEVO: Event listeners para el modal de pizza personalizada
+customSizeOptions.addEventListener('click', (e) => {
+    if (e.target.matches('.size-button')) {
+        customPizzaSize = e.target.dataset.size;
+        customSizeOptions.querySelectorAll('.size-button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.size === customPizzaSize);
+        });
     }
-    const success = await window.api.updatePaymentStatus({ orderId: payingOrderId, status: 'Pagado', paymentMethod: paymentMethod });
-    if (success) { loadOrderHistory(); }
-    else { showAlert('Hubo un error al actualizar el estado de pago.'); }
-    confirmPaymentModal.classList.add('hidden');
-    payingOrderId = null;
+});
+customCancelButton.addEventListener('click', () => {
+    customPizzaModal.classList.add('hidden');
+});
+customAddToOrderButton.addEventListener('click', () => {
+    const ingredients = customPizzaIngredients.value.trim();
+    const price = parseInt(customPizzaPriceInput.value);
+    if (!ingredients) { showAlert('Por favor, ingrese los ingredientes de la pizza.'); return; }
+    if (isNaN(price) || price <= 0) { showAlert('Por favor, ingrese un precio válido.'); return; }
+    const sizePrefix = {xl: 'XL - ',mediana: 'M - ',chica: 'CH - '}[customPizzaSize] || '';
+    const itemName = `${sizePrefix}Pizza Personalizada`;
+    const finalItem = { orderId: Date.now(), name: itemName, size: customPizzaSize, extras: [], price: price, notes: ingredients };
+    addToOrder(finalItem);
+    customPizzaModal.classList.add('hidden');
 });
 
 // --- FUNCIONES DE RENDERIZADO Y BÚSQUEDA ---
 function displayProducts(products) {
   pizzasContainer.innerHTML = '';
   products.pizzas.forEach(pizza => { pizzasContainer.appendChild(createProductCard(pizza, 'pizza')); });
+  
+  // --> NUEVO: Crear y añadir la tarjeta especial de pizza personalizada
+  const customPizzaCard = document.createElement('div');
+  customPizzaCard.className = 'bg-white p-3 rounded-lg shadow cursor-pointer hover:shadow-xl transition-shadow text-center border-2 border-dashed border-blue-400 flex items-center justify-center';
+  customPizzaCard.innerHTML = `<h3 class="font-bold text-md text-blue-600">+ Pizza Personalizada</h3>`;
+  customPizzaCard.addEventListener('click', openCustomPizzaModal);
+  pizzasContainer.appendChild(customPizzaCard);
+
   churrascosContainer.innerHTML = '';
   products.churrascos.forEach(churrasco => { churrascosContainer.appendChild(createProductCard(churrasco, 'churrasco')); });
   otrosContainer.innerHTML = '';
@@ -385,11 +380,7 @@ function createProductCard(item, type) {
   const card = document.createElement('div');
   card.className = 'product-card bg-white p-3 rounded-lg shadow cursor-pointer hover:shadow-xl transition-shadow text-center';
   card.dataset.name = item.nombre.toLowerCase();
-  
-  // No mostramos el precio en la tarjeta para una vista más limpia.
-  // El precio se ve al agregar al pedido o en el modal.
   card.innerHTML = `<h3 class="font-bold text-md">${item.nombre}</h3>`;
-
   if (type === 'pizza') { card.addEventListener('click', () => openPizzaModal(item)); }
   else if (type === 'churrasco') { card.addEventListener('click', () => openNotesModal(item)); }
   else { card.addEventListener('click', () => { const itemData = { orderId: Date.now(), name: item.nombre, price: item.precio, size: null, extras: [], notes: '' }; addToOrder(itemData); }); }
@@ -404,7 +395,6 @@ searchInput.addEventListener('input', (e) => {
         card.classList.toggle('hidden', !card.dataset.name.includes(searchTerm));
     });
 });
-
 searchExtrasInput.addEventListener('input', (e) => {
     const searchTerm = e.target.value.toLowerCase();
     document.querySelectorAll('#extras-container label').forEach(label => {
@@ -415,10 +405,8 @@ searchExtrasInput.addEventListener('input', (e) => {
 
 // --- INICIALIZACIÓN ---
 document.addEventListener('DOMContentLoaded', () => {
-  console.log("DOM cargado. Inicializando la aplicación...");
   window.api.getProducts().then((products) => {
     if (products && Object.keys(products).length > 0) {
-      console.log("Productos recibidos:", products);
       allProducts = products;
       displayProducts(products);
     } else {
@@ -430,16 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showAlert("Error crítico al cargar productos. Revise la consola.");
   });
 
-  // --> LÓGICA PARA LOS BOTONES DE LA VENTANA <--
-  document.getElementById('minimize-btn').addEventListener('click', () => {
-    window.api.minimizeWindow();
-  });
-  
-  document.getElementById('maximize-btn').addEventListener('click', () => {
-    window.api.maximizeWindow();
-  });
-
-  document.getElementById('close-btn').addEventListener('click', () => {
-    window.api.closeWindow();
-  });
+  document.getElementById('minimize-btn').addEventListener('click', () => { window.api.minimizeWindow(); });
+  document.getElementById('maximize-btn').addEventListener('click', () => { window.api.maximizeWindow(); });
+  document.getElementById('close-btn').addEventListener('click', () => { window.api.closeWindow(); });
 });

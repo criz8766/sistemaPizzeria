@@ -4,14 +4,16 @@
   "description": "",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder" 
   },
   "keywords": [],
-  "author": "",
+  "author": "Criz (Arccidev)",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "electron": "^37.2.6"
+    "electron": "^37.2.6",
+    "electron-builder": "^26.0.12"
   },
   "dependencies": {
     "dotenv": "^17.2.1",
@@ -21,5 +23,27 @@
     "pdfkit": "^0.17.1",
     "sqlite3": "^5.1.7",
     "xlsx": "^0.18.5"
+  },
+  "build": {
+    "appId": "com.piamonte.sistema",
+    "productName": "Sistema Pizzeria Piamonte",
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "extraResources": [
+      {
+        "from": "./piamonte.db",
+        "to": "piamonte.db"
+      },
+      {
+        "from": "./.env",
+        "to": ".env"
+      }
+    ]
   }
 }

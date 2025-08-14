@@ -188,10 +188,11 @@ db.run(`CREATE TABLE IF NOT EXISTS pedidos (
     { nombre: 'Cerveza Kunstmann', categoria: 'Cervezas', precio: 2200 },
     { nombre: 'Cerveza Royal', categoria: 'Cervezas', precio: 1700 },
     { nombre: 'Cerveza Heineken', categoria: 'Cervezas', precio: 1700 },
-    { nombre: 'Vino Misiones de Rengo', categoria: 'Vinos', precio: 9900 },
-    { nombre: 'Vino Casillero del Diablo', categoria: 'Vinos', precio: 9900 },
-    { nombre: 'Vino 120', categoria: 'Vinos', precio: 5900 },
-    { nombre: 'Vino carmen (187.5 ml)', categoria: 'Vinos', precio: 2900 }
+    { nombre: 'Vino Mision varietal', categoria: 'Vinos', precio: 8900 },
+    { nombre: 'Vino Mision reserva', categoria: 'Vinos', precio: 11900 },
+    { nombre: 'Vino Casillero reserva', categoria: 'Vinos', precio: 11900 },
+    { nombre: 'Vino 120 de santa rita (700 ml)', categoria: 'Vinos', precio: 6900 },
+    { nombre: 'Vino carmen (187.5 ml)', categoria: 'Vinos', precio: 3500 }
   ];
   
   const stmtOtros = db.prepare("INSERT OR IGNORE INTO otros_productos (nombre, categoria, precio) VALUES (?, ?, ?)");
