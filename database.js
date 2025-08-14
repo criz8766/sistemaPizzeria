@@ -65,7 +65,6 @@ db.run(`CREATE TABLE IF NOT EXISTS pedidos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   cliente_nombre TEXT,
   cliente_telefono TEXT,
-  tipo_pedido TEXT,
   total INTEGER NOT NULL,
   items_json TEXT,
   fecha TEXT NOT NULL,
@@ -188,11 +187,15 @@ db.run(`CREATE TABLE IF NOT EXISTS pedidos (
     { nombre: 'Cerveza Kunstmann', categoria: 'Cervezas', precio: 2200 },
     { nombre: 'Cerveza Royal', categoria: 'Cervezas', precio: 1700 },
     { nombre: 'Cerveza Heineken', categoria: 'Cervezas', precio: 1700 },
+    { nombre: 'Cerveza austral', categoria: 'Cervezas', precio: 2200},
     { nombre: 'Vino Mision varietal', categoria: 'Vinos', precio: 8900 },
     { nombre: 'Vino Mision reserva', categoria: 'Vinos', precio: 11900 },
     { nombre: 'Vino Casillero reserva', categoria: 'Vinos', precio: 11900 },
     { nombre: 'Vino 120 de santa rita (700 ml)', categoria: 'Vinos', precio: 6900 },
-    { nombre: 'Vino carmen (187.5 ml)', categoria: 'Vinos', precio: 3500 }
+    { nombre: 'Vino carmen (187.5 ml)', categoria: 'Vinos', precio: 3500 },
+    { nombre: 'Tallarines boloñesa + ensalada + jugo sin azucar', categoria: 'Menu junaeb', precio: 4500 },
+    { nombre: 'pizza mini personal americana + jugo sin azucar', categoria: 'Menu junaeb', precio: 2350 },
+    { nombre: 'envase para llevar', categoria: "extra", precio: 500}
   ];
   
   const stmtOtros = db.prepare("INSERT OR IGNORE INTO otros_productos (nombre, categoria, precio) VALUES (?, ?, ?)");

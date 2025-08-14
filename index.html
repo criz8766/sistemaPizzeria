@@ -105,14 +105,11 @@
           <hr class="my-3">
 
           <div id="order-details" class="space-y-4 text-sm">
-            <div>
-              <h3 class="font-semibold mb-2">Tipo de Pedido</h3>
-              <div class="flex gap-4"><label class="flex items-center cursor-pointer"><input type="radio" name="order-type" value="servir" class="mr-2" checked>Para Servir</label><label class="flex items-center cursor-pointer"><input type="radio" name="order-type" value="llevar" class="mr-2">Para Llevar</label></div>
-            </div>
+
             <div>
               <h3 class="font-semibold mb-2">Entrega</h3>
               <div class="flex gap-4"><label class="flex items-center cursor-pointer"><input id="delivery-delay" name="delivery-type" type="radio" value="demora" class="mr-2" checked>Demora</label><label class="flex items-center cursor-pointer"><input id="delivery-scheduled" name="delivery-type" type="radio" value="agendado" class="mr-2">Agendado</label></div>
-              <div id="delivery-delay-input" class="mt-2"><input type="number" id="delay-minutes" value="30" class="w-full p-2 text-sm border border-gray-200 rounded-md" placeholder="Minutos"></div>
+              <div id="delivery-delay-input" class="mt-2"><input type="number" id="delay-minutes" value="25" class="w-full p-2 text-sm border border-gray-200 rounded-md" placeholder="Minutos"></div>
               <div id="delivery-scheduled-input" class="mt-2 hidden"><input type="time" id="scheduled-time" class="w-full p-2 text-sm border border-gray-200 rounded-md"></div>
             </div>
             <div>
@@ -223,7 +220,6 @@
         </div>
     </div>
     
-    NUEVO: MODAL PARA PIZZA PERSONALIZADA <-- // -->
     <div id="custom-pizza-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4">
         <div class="bg-white p-6 rounded-lg shadow-xl w-1/2 max-w-lg">
           <h2 class="text-3xl font-bold mb-4">Pizza Personalizada</h2>

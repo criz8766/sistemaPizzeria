@@ -36,14 +36,13 @@ const alertModal = document.getElementById('alert-modal');
 const alertModalMessage = document.getElementById('alert-modal-message');
 const alertModalCloseBtn = document.getElementById('alert-modal-close-btn');
 
-// --> NUEVO: Elementos del DOM para pizza personalizada
 const customPizzaModal = document.getElementById('custom-pizza-modal');
 const customSizeOptions = document.getElementById('custom-size-options');
 const customPizzaIngredients = document.getElementById('custom-pizza-ingredients');
 const customPizzaPriceInput = document.getElementById('custom-pizza-price-input');
 const customCancelButton = document.getElementById('custom-cancel-button');
 const customAddToOrderButton = document.getElementById('custom-add-to-order-button');
-let customPizzaSize = 'mediana'; // Variable para guardar el tamaño seleccionado
+let customPizzaSize = 'mediana';
 
 
 // --- LÓGICA DE ALERTAS ---
@@ -222,7 +221,6 @@ function openNotesModal(item) {
     notesModal.classList.remove('hidden');
 }
 
-// --> NUEVO: Función para abrir y resetear el modal de pizza personalizada
 function openCustomPizzaModal() {
     customPizzaIngredients.value = '';
     customPizzaPriceInput.value = '';
@@ -256,7 +254,8 @@ finalizeOrderBtn.addEventListener('click', async () => {
           paymentMethod = otherPayment;
       }
   }
-  fullOrder = { id: editingOrderId, customer: { name: customerName, phone: document.getElementById('customer-phone').value.trim() }, orderType: document.querySelector('input[name="order-type"]:checked').value, total: currentOrder.reduce((sum, item) => sum + item.price, 0), items: currentOrder, timestamp: new Date().toISOString(), delivery: { type: deliveryType, time: deliveryTime }, payment: { status: paymentStatus, method: paymentMethod } };
+  // --> LÍNEA ELIMINADA: Ya no se lee el `order-type`
+  fullOrder = { id: editingOrderId, customer: { name: customerName, phone: document.getElementById('customer-phone').value.trim() }, total: currentOrder.reduce((sum, item) => sum + item.price, 0), items: currentOrder, timestamp: new Date().toISOString(), delivery: { type: deliveryType, time: deliveryTime }, payment: { status: paymentStatus, method: paymentMethod } };
   try {
     const filePath = await window.api.generateTicket(fullOrder);
     if (filePath) { showPrintPreview(filePath); }
@@ -298,7 +297,7 @@ historyListEl.addEventListener('click', async (e) => {
         const orders = await window.api.getTodaysOrders();
         const orderToReprint = orders.find(o => o.id === orderId);
         if (orderToReprint) {
-            fullOrder = { id: orderToReprint.id, customer: { name: orderToReprint.cliente_nombre, phone: orderToReprint.cliente_telefono }, orderType: orderToReprint.tipo_pedido, total: orderToReprint.total, items: JSON.parse(orderToReprint.items_json), timestamp: orderToReprint.fecha, delivery: { type: orderToReprint.tipo_entrega, time: orderToReprint.hora_entrega }, payment: { status: orderToReprint.estado_pago, method: orderToReprint.forma_pago } };
+            fullOrder = { id: orderToReprint.id, customer: { name: orderToReprint.cliente_nombre, phone: orderToReprint.cliente_telefono }, total: orderToReprint.total, items: JSON.parse(orderToReprint.items_json), timestamp: orderToReprint.fecha, delivery: { type: orderToReprint.tipo_entrega, time: orderToReprint.hora_entrega }, payment: { status: orderToReprint.estado_pago, method: orderToReprint.forma_pago } };
             const filePath = await window.api.generateTicket(fullOrder);
             if (filePath) { showPrintPreview(filePath); }
             else { showAlert("Hubo un error al generar el ticket de reimpresión."); }
@@ -324,43 +323,19 @@ document.getElementById('notes-confirm-btn').addEventListener('click', () => { c
 document.getElementById('history-payment-method').addEventListener('change', (e) => { document.getElementById('history-other-payment-wrapper').classList.toggle('hidden', e.target.value !== 'otra'); });
 document.getElementById('payment-cancel-btn').addEventListener('click', () => { confirmPaymentModal.classList.add('hidden'); payingOrderId = null; });
 document.getElementById('payment-confirm-btn').addEventListener('click', async () => { let paymentMethod = document.getElementById('history-payment-method').value; if (paymentMethod === 'otra') { const otherPayment = document.getElementById('history-other-payment-method').value.trim(); if (!otherPayment) { showAlert('Por favor, especifique la otra forma de pago.'); return; } paymentMethod = otherPayment; } const success = await window.api.updatePaymentStatus({ orderId: payingOrderId, status: 'Pagado', paymentMethod: paymentMethod }); if (success) { loadOrderHistory(); } else { showAlert('Hubo un error al actualizar el estado de pago.'); } confirmPaymentModal.classList.add('hidden'); payingOrderId = null; });
-
-// --> NUEVO: Event listeners para el modal de pizza personalizada
-customSizeOptions.addEventListener('click', (e) => {
-    if (e.target.matches('.size-button')) {
-        customPizzaSize = e.target.dataset.size;
-        customSizeOptions.querySelectorAll('.size-button').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.size === customPizzaSize);
-        });
-    }
-});
-customCancelButton.addEventListener('click', () => {
-    customPizzaModal.classList.add('hidden');
-});
-customAddToOrderButton.addEventListener('click', () => {
-    const ingredients = customPizzaIngredients.value.trim();
-    const price = parseInt(customPizzaPriceInput.value);
-    if (!ingredients) { showAlert('Por favor, ingrese los ingredientes de la pizza.'); return; }
-    if (isNaN(price) || price <= 0) { showAlert('Por favor, ingrese un precio válido.'); return; }
-    const sizePrefix = {xl: 'XL - ',mediana: 'M - ',chica: 'CH - '}[customPizzaSize] || '';
-    const itemName = `${sizePrefix}Pizza Personalizada`;
-    const finalItem = { orderId: Date.now(), name: itemName, size: customPizzaSize, extras: [], price: price, notes: ingredients };
-    addToOrder(finalItem);
-    customPizzaModal.classList.add('hidden');
-});
+customSizeOptions.addEventListener('click', (e) => { if (e.target.matches('.size-button')) { customPizzaSize = e.target.dataset.size; customSizeOptions.querySelectorAll('.size-button').forEach(btn => { btn.classList.toggle('active', btn.dataset.size === customPizzaSize); }); } });
+customCancelButton.addEventListener('click', () => { customPizzaModal.classList.add('hidden'); });
+customAddToOrderButton.addEventListener('click', () => { const ingredients = customPizzaIngredients.value.trim(); const price = parseInt(customPizzaPriceInput.value); if (!ingredients) { showAlert('Por favor, ingrese los ingredientes de la pizza.'); return; } if (isNaN(price) || price <= 0) { showAlert('Por favor, ingrese un precio válido.'); return; } const sizePrefix = {xl: 'XL - ',mediana: 'M - ',chica: 'CH - '}[customPizzaSize] || ''; const itemName = `${sizePrefix}Pizza Personalizada`; const finalItem = { orderId: Date.now(), name: itemName, size: customPizzaSize, extras: [], price: price, notes: ingredients }; addToOrder(finalItem); customPizzaModal.classList.add('hidden'); });
 
 // --- FUNCIONES DE RENDERIZADO Y BÚSQUEDA ---
 function displayProducts(products) {
   pizzasContainer.innerHTML = '';
   products.pizzas.forEach(pizza => { pizzasContainer.appendChild(createProductCard(pizza, 'pizza')); });
-  
-  // --> NUEVO: Crear y añadir la tarjeta especial de pizza personalizada
   const customPizzaCard = document.createElement('div');
   customPizzaCard.className = 'bg-white p-3 rounded-lg shadow cursor-pointer hover:shadow-xl transition-shadow text-center border-2 border-dashed border-blue-400 flex items-center justify-center';
   customPizzaCard.innerHTML = `<h3 class="font-bold text-md text-blue-600">+ Pizza Personalizada</h3>`;
   customPizzaCard.addEventListener('click', openCustomPizzaModal);
   pizzasContainer.appendChild(customPizzaCard);
-
   churrascosContainer.innerHTML = '';
   products.churrascos.forEach(churrasco => { churrascosContainer.appendChild(createProductCard(churrasco, 'churrasco')); });
   otrosContainer.innerHTML = '';
@@ -417,7 +392,6 @@ document.addEventListener('DOMContentLoaded', () => {
     console.error("Error al llamar a getProducts:", error);
     showAlert("Error crítico al cargar productos. Revise la consola.");
   });
-
   document.getElementById('minimize-btn').addEventListener('click', () => { window.api.minimizeWindow(); });
   document.getElementById('maximize-btn').addEventListener('click', () => { window.api.maximizeWindow(); });
   document.getElementById('close-btn').addEventListener('click', () => { window.api.closeWindow(); });

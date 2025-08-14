@@ -12,9 +12,7 @@ const nodemailer = require('nodemailer');
 // --- CONFIGURACIÓN DE RUTAS ---
 const userDataPath = app.getPath('userData');
 const dbPath = path.join(userDataPath, 'piamonte.db');
-const sourceDbPath = app.isPackaged
-  ? path.join(process.resourcesPath, 'piamonte.db')
-  : path.join(__dirname, 'piamonte.db');
+const sourceDbPath = app.isPackaged ? path.join(process.resourcesPath, 'piamonte.db') : path.join(__dirname, 'piamonte.db');
 
 if (!fs.existsSync(dbPath)) {
   try {
@@ -25,9 +23,7 @@ if (!fs.existsSync(dbPath)) {
   }
 }
 
-const envPath = app.isPackaged
-  ? path.join(process.resourcesPath, '.env')
-  : path.join(__dirname, '.env');
+const envPath = app.isPackaged ? path.join(process.resourcesPath, '.env') : path.join(__dirname, '.env');
 require('dotenv').config({ path: envPath });
 
 const openDb = (readOnly = false) => {
@@ -76,8 +72,9 @@ ipcMain.handle('generate-ticket', async (event, orderData) => {
   const timePart = orderDate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false });
   const formattedDateTime = `${datePart}, ${timePart}`;
   doc.text(formattedDateTime, { align: 'center' });
-  const tipoPedido = orderData.orderType.charAt(0).toUpperCase() + orderData.orderType.slice(1);
-  doc.text(`¿servir o llevar?: ${tipoPedido}`, { align: 'center' });
+  
+  // --> LÍNEA ELIMINADA: Ya no se muestra el tipo de pedido
+  
   doc.moveDown(0.5);
   if (orderData.delivery.type === 'demora' && orderData.delivery.time) {
     doc.font('Helvetica-Bold').fontSize(10).text(`Hora estimada: ${orderData.delivery.time}`, { align: 'center' });
@@ -104,24 +101,17 @@ ipcMain.handle('generate-ticket', async (event, orderData) => {
   });
   doc.moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).dash(2, { space: 3 }).stroke().undash();
   doc.moveDown(0.5);
-
-  // --> NUEVO: Bloque para calcular y mostrar la propina
   const totalProductos = orderData.total;
   const propina = Math.round(totalProductos * 0.1);
   const totalConPropina = totalProductos + propina;
-
-  doc.font('Helvetica-Bold').fontSize(10);
-  doc.text(`SUBTOTAL: $${totalProductos.toLocaleString('es-CL')}`, { align: 'center' });
+  doc.font('Helvetica-Bold').fontSize(12);
+  doc.text(`TOTAL PRODUCTOS: $${totalProductos.toLocaleString('es-CL')}`, { align: 'right' });
   doc.moveDown(0.5);
-  
   doc.font('Helvetica').fontSize(10);
   doc.text(`Propina Sugerida (10%): $${propina.toLocaleString('es-CL')}`, { align: 'right' });
   doc.moveDown(0.5);
-
-  doc.font('Helvetica-Bold').fontSize(10);
+  doc.font('Helvetica-Bold').fontSize(14);
   doc.text(`TOTAL CON PROPINA: $${totalConPropina.toLocaleString('es-CL')}`, { align: 'right' });
-  // <-- FIN DEL BLOQUE NUEVO
-  
   doc.end();
   await new Promise(resolve => stream.on('finish', resolve));
   return tempFilePath;
@@ -134,12 +124,13 @@ ipcMain.handle('confirm-print', async (event, {filePath, orderData}) => {
     db.run(sql, params, function(err) { if (err) reject(err); else resolve(this); });
   });
   try {
+    // --> CORREGIDO: Se elimina `tipo_pedido` de las consultas
     if (orderData.id) {
-      const sql = `UPDATE pedidos SET cliente_nombre = ?, cliente_telefono = ?, tipo_pedido = ?, total = ?, items_json = ?, fecha = ?, tipo_entrega = ?, hora_entrega = ?, forma_pago = ?, estado_pago = ? WHERE id = ?`;
-      await runDb(sql, [orderData.customer.name, orderData.customer.phone, orderData.orderType, orderData.total, itemsJson, orderData.timestamp, orderData.delivery.type, orderData.delivery.time, orderData.payment.method, orderData.payment.status, orderData.id]);
+      const sql = `UPDATE pedidos SET cliente_nombre = ?, cliente_telefono = ?, total = ?, items_json = ?, fecha = ?, tipo_entrega = ?, hora_entrega = ?, forma_pago = ?, estado_pago = ? WHERE id = ?`;
+      await runDb(sql, [orderData.customer.name, orderData.customer.phone, orderData.total, itemsJson, orderData.timestamp, orderData.delivery.type, orderData.delivery.time, orderData.payment.method, orderData.payment.status, orderData.id]);
     } else {
-      const sql = `INSERT INTO pedidos (cliente_nombre, cliente_telefono, tipo_pedido, total, items_json, fecha, tipo_entrega, hora_entrega, forma_pago, estado_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-      await runDb(sql, [orderData.customer.name, orderData.customer.phone, orderData.orderType, orderData.total, itemsJson, orderData.timestamp, orderData.delivery.type, orderData.delivery.time, orderData.payment.method, orderData.payment.status]);
+      const sql = `INSERT INTO pedidos (cliente_nombre, cliente_telefono, total, items_json, fecha, tipo_entrega, hora_entrega, forma_pago, estado_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      await runDb(sql, [orderData.customer.name, orderData.customer.phone, orderData.total, itemsJson, orderData.timestamp, orderData.delivery.type, orderData.delivery.time, orderData.payment.method, orderData.payment.status]);
     }
   } catch (dbErr) { console.error('Error al guardar el pedido:', dbErr); }
   finally { db.close(); }
@@ -157,6 +148,7 @@ ipcMain.handle('cancel-print', (event, filePath) => {
 async function generateDailyReport(autoSavePath = null) {
   const db = openDb(true);
   const today = getLocalDate();
+  // --> CORREGIDO: Se elimina `tipo_pedido` del reporte
   const sql = `SELECT * FROM pedidos WHERE date(fecha, 'localtime') = ?`;
   const orders = await new Promise((resolve, reject) => { db.all(sql, [today], (err, rows) => { if (err) reject(err); else resolve(rows); }); });
   db.close();
@@ -166,14 +158,14 @@ async function generateDailyReport(autoSavePath = null) {
     const items = JSON.parse(order.items_json);
     items.forEach(item => {
       const agregadosStr = item.extras && item.extras.length > 0 ? item.extras.map(e => e.nombre).join(', ') : '';
-      reportData.push({ 'ID Pedido': order.id, 'Fecha': new Date(order.fecha).toLocaleTimeString('es-CL'), 'Cliente': order.cliente_nombre, 'Tipo Pedido': order.tipo_pedido, 'Estado Pedido': order.estado, 'Estado Pago': order.estado_pago, 'Forma de Pago': order.forma_pago || '', 'Producto': item.name, 'Agregados': agregadosStr, 'Notas': item.notes || '', 'Precio Item': item.price });
+      reportData.push({ 'ID Pedido': order.id, 'Fecha': new Date(order.fecha).toLocaleTimeString('es-CL'), 'Cliente': order.cliente_nombre, 'Estado Pedido': order.estado, 'Estado Pago': order.estado_pago, 'Forma de Pago': order.forma_pago || '', 'Producto': item.name, 'Agregados': agregadosStr, 'Notas': item.notes || '', 'Precio Item': item.price });
     });
     totalVentas += order.total;
   });
   reportData.push({}, { 'Notas': 'TOTAL VENTAS', 'Precio Item': totalVentas });
   const workbook = xlsx.utils.book_new();
   const worksheet = xlsx.utils.json_to_sheet(reportData);
-  worksheet['!cols'] = [ { wch: 10 }, { wch: 12 }, { wch: 25 }, { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 30 }, { wch: 25 }, { wch: 25 }, { wch: 12 } ];
+  worksheet['!cols'] = [ { wch: 10 }, { wch: 12 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 30 }, { wch: 25 }, { wch: 25 }, { wch: 12 } ];
   xlsx.utils.book_append_sheet(workbook, worksheet, 'Ventas del Día');
   let finalPath = autoSavePath;
   if (!finalPath) {
@@ -210,10 +202,7 @@ async function clearOrdersTable() {
     console.log('Limpiando y reseteando la tabla de pedidos...');
     const db = openDb();
     const run = (sql) => new Promise((resolve, reject) => {
-        db.run(sql, [], function(err) {
-            if (err) return reject(err);
-            resolve(this);
-        });
+        db.run(sql, [], function(err) { if (err) return reject(err); resolve(this); });
     });
     try {
         const deleteInfo = await run(`DELETE FROM pedidos`);
