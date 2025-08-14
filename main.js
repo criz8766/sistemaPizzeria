@@ -25,7 +25,9 @@ if (!fs.existsSync(dbPath)) {
   }
 }
 
-const envPath = app.isPackaged ? path.join(process.resourcesPath, '.env') : path.join(__dirname, '.env');
+const envPath = app.isPackaged
+  ? path.join(process.resourcesPath, '.env')
+  : path.join(__dirname, '.env');
 require('dotenv').config({ path: envPath });
 
 const openDb = (readOnly = false) => {
@@ -59,14 +61,38 @@ ipcMain.handle('get-products', async () => {
   finally { db.close(); }
 });
 
+// --> FUNCIÓN DE TICKET MODIFICADA <--
 ipcMain.handle('generate-ticket', async (event, orderData) => {
   const ticketWidth = 204;
   const tempFilePath = path.join(os.tmpdir(), `ticket-${Date.now()}.pdf`);
   const doc = new PDFDocument({ size: [ticketWidth, 842], margins: { top: 15, bottom: 10, left: 5, right: 5 } });
   const stream = fs.createWriteStream(tempFilePath);
   doc.pipe(stream);
+
+  // --- NUEVO: Añadir logo e información de contacto ---
+  const logoPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'assets/logo.jpg')
+    : path.join(__dirname, 'assets/logo.jpg');
+    
+  if (fs.existsSync(logoPath)) {
+      doc.image(logoPath, {
+          fit: [80, 80], // Tamaño del logo
+          align: 'center',
+          valign: 'center'
+      });
+      doc.moveDown(0.5);
+  }
+
   doc.font('Helvetica-Bold').fontSize(14).text('Pizzería Piamonte', { align: 'center' });
   doc.moveDown(0.5);
+
+  doc.font('Helvetica').fontSize(9);
+  doc.text('Fono: 422228001', { align: 'center' });
+  doc.text('WhatsApp: +56946914655', { align: 'center' });
+  doc.text('Instagram: @pizzeria_piamonte_chillan', { align: 'center' });
+  doc.moveDown(1);
+  // --- FIN DE LA NUEVA SECCIÓN ---
+
   doc.font('Helvetica').fontSize(10);
   doc.text(`Pedido para: ${orderData.customer.name}`, { align: 'center' });
   const orderDate = new Date(orderData.timestamp);
@@ -103,14 +129,19 @@ ipcMain.handle('generate-ticket', async (event, orderData) => {
   const totalProductos = orderData.total;
   const propina = Math.round(totalProductos * 0.1);
   const totalConPropina = totalProductos + propina;
+  
+  // Manteniendo tus últimos cambios para el subtotal
   doc.font('Helvetica-Bold').fontSize(10);
   doc.text(`SUBTOTAL: $${totalProductos.toLocaleString('es-CL')}`, { align: 'center' });
   doc.moveDown(0.5);
+  
   doc.font('Helvetica').fontSize(10);
   doc.text(`Propina Sugerida (10%): $${propina.toLocaleString('es-CL')}`, { align: 'right' });
   doc.moveDown(0.5);
+  
   doc.font('Helvetica-Bold').fontSize(10);
   doc.text(`TOTAL CON PROPINA: $${totalConPropina.toLocaleString('es-CL')}`, { align: 'right' });
+
   doc.end();
   await new Promise(resolve => stream.on('finish', resolve));
   return tempFilePath;
@@ -153,50 +184,30 @@ ipcMain.handle('update-order', async (event, orderData) => {
     });
 });
 
-// --> CORREGIDO: Lógica completa para eliminar y reordenar los IDs
 ipcMain.handle('delete-order', async (event, orderId) => {
     const db = openDb();
     const today = getLocalDate();
-
-    // Envolvemos todo en una promesa para manejar el flujo asíncrono
     return new Promise((resolve) => {
-        // `serialize` asegura que los comandos se ejecuten uno tras otro
         db.serialize(async () => {
             try {
-                // 1. Iniciar una transacción
                 await new Promise((res, rej) => db.run('BEGIN TRANSACTION', err => err ? rej(err) : res()));
-
-                // 2. Eliminar el pedido solicitado
                 await new Promise((res, rej) => db.run('DELETE FROM pedidos WHERE id = ?', [orderId], err => err ? rej(err) : res()));
                 console.log(`Pedido #${orderId} eliminado.`);
-
-                // 3. Obtener todos los pedidos restantes del día, ordenados por ID
                 const remainingOrders = await new Promise((res, rej) => {
                     const sql = `SELECT * FROM pedidos WHERE date(fecha, 'localtime') = ? ORDER BY id ASC`;
                     db.all(sql, [today], (err, rows) => err ? rej(err) : res(rows));
                 });
-                
-                // 4. Borrar todos esos pedidos para re-insertarlos con IDs correctos
                 await new Promise((res, rej) => db.run(`DELETE FROM pedidos WHERE date(fecha, 'localtime') = ?`, [today], err => err ? rej(err) : res()));
-
-                // 5. Resetear el contador de autoincremento para empezar desde 0 (o el ID más bajo del día si hay de otros días)
-                // Esta es una forma segura de manejar el reseteo
                 await new Promise((res, rej) => db.run(`DELETE FROM sqlite_sequence WHERE name='pedidos'`, err => err ? rej(err) : res()));
                 console.log('Contador de pedidos reseteado para la re-inserción.');
-
-                // 6. Re-insertar los pedidos con IDs secuenciales
                 for (const order of remainingOrders) {
                     const sql = `INSERT INTO pedidos (cliente_nombre, cliente_telefono, total, items_json, fecha, estado, tipo_entrega, hora_entrega, forma_pago, estado_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
                     const params = [order.cliente_nombre, order.cliente_telefono, order.total, order.items_json, order.fecha, order.estado, order.tipo_entrega, order.hora_entrega, order.forma_pago, order.estado_pago];
                     await new Promise((res, rej) => db.run(sql, params, err => err ? rej(err) : res()));
                 }
                 console.log(`${remainingOrders.length} pedidos han sido re-indexados.`);
-
-                // 7. Finalizar la transacción
                 await new Promise((res, rej) => db.run('COMMIT', err => err ? rej(err) : res()));
-                
                 resolve(true);
-
             } catch (error) {
                 console.error("Error en la transacción de borrado, revirtiendo cambios:", error);
                 await new Promise((res, rej) => db.run('ROLLBACK', err => err ? rej(err) : res()));
