@@ -30,6 +30,9 @@ const updateOrderBtn = document.getElementById('update-order-btn');
 const reportBtn = document.getElementById('report-btn');
 const historyListEl = document.getElementById('history-list');
 const historyTabBtn = document.querySelector('.tab-button[data-target="history-tab-content"]');
+const settingsTabBtn = document.querySelector('.tab-button[data-target="settings-tab-content"]');
+const priceSettingsContainer = document.getElementById('price-settings-container');
+const savePricesBtn = document.getElementById('save-prices-btn');
 const paymentMethodWrapper = document.getElementById('payment-method-wrapper');
 const paymentMethodSelect = document.getElementById('payment-method');
 const otherPaymentWrapper = document.getElementById('other-payment-wrapper');
@@ -272,6 +275,88 @@ function collectOrderData() {
     return { id: editingOrderId, customer: { name: customerName, phone: document.getElementById('customer-phone').value.trim() }, total: currentOrder.reduce((sum, item) => sum + item.price, 0), items: currentOrder, timestamp: new Date().toISOString(), delivery: { type: deliveryType, time: deliveryTime }, payment: { status: paymentStatus, method: paymentMethod } };
 }
 
+
+// --- LÓGICA DE CONFIGURACIÓN ---
+function populatePriceSettings() {
+    priceSettingsContainer.innerHTML = '';
+
+    const createSection = (title, items, priceFields, searchable = false) => {
+        const section = document.createElement('div');
+        let searchInputHTML = '';
+        if (searchable) {
+            searchInputHTML = `
+                <div class="mb-4">
+                    <input type="text" id="search-settings-${title.toLowerCase()}" class="w-full p-2 border rounded-lg" placeholder="Buscar en ${title}...">
+                </div>
+            `;
+        }
+
+        section.innerHTML = `
+            <h3 class="text-xl font-bold text-gray-800 mb-4 pb-2 border-b">${title}</h3>
+            ${searchInputHTML}
+        `;
+        const grid = document.createElement('div');
+        grid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6';
+        grid.id = `settings-grid-${title.toLowerCase()}`;
+
+        items.forEach(item => {
+            const itemEl = document.createElement('div');
+            itemEl.className = 'bg-white p-4 rounded-lg shadow-sm settings-item';
+            itemEl.dataset.name = item.nombre.toLowerCase();
+
+            let priceInputs = priceFields.map(field => `
+                <div class="flex items-center justify-between">
+                    <label class="text-sm text-gray-600 capitalize">${field.label}:</label>
+                    <input type="number" class="price-input w-24 p-1 border rounded text-right" data-table="${field.table}" data-id="${item.id}" data-field="${field.name}" value="${item[field.name] || 0}">
+                </div>
+            `).join('');
+
+            itemEl.innerHTML = `
+                <h4 class="font-semibold mb-2">${item.nombre}</h4>
+                <div class="space-y-2">
+                    ${priceInputs}
+                </div>
+            `;
+            grid.appendChild(itemEl);
+        });
+        section.appendChild(grid);
+        priceSettingsContainer.appendChild(section);
+
+        if (searchable) {
+            document.getElementById(`search-settings-${title.toLowerCase()}`).addEventListener('input', (e) => {
+                const searchTerm = e.target.value.toLowerCase();
+                document.querySelectorAll(`#settings-grid-${title.toLowerCase()} .settings-item`).forEach(item => {
+                    item.classList.toggle('hidden', !item.dataset.name.includes(searchTerm));
+                });
+            });
+        }
+    };
+
+    createSection('Pizzas', allProducts.pizzas, [
+        { label: 'Chica', name: 'precio_chica', table: 'pizzas' },
+        { label: 'Mediana', name: 'precio_mediana', table: 'pizzas' },
+        { label: 'XL', name: 'precio_xl', table: 'pizzas' },
+    ], true); // Habilitar buscador para Pizzas
+
+    createSection('Churrascos', allProducts.churrascos, [
+        { label: 'Precio', name: 'precio', table: 'churrascos' },
+    ]);
+
+    createSection('Agregados', allProducts.agregados, [
+        { label: 'Ind.', name: 'precio_individual', table: 'agregados' },
+        { label: 'Med.', name: 'precio_mediana', table: 'agregados' },
+        { label: 'XL', name: 'precio_xl', table: 'agregados' },
+    ]);
+
+    const otrosGrouped = groupByCategory(allProducts.otros);
+    for (const categoria in otrosGrouped) {
+        createSection(categoria, otrosGrouped[categoria], [
+            { label: 'Precio', name: 'precio', table: 'otros_productos' },
+        ]);
+    }
+}
+
+
 // --- EVENT LISTENERS ---
 alertModalCloseBtn.addEventListener('click', () => { alertModal.classList.add('hidden'); });
 
@@ -376,11 +461,56 @@ document.getElementById('delete-confirm-btn').addEventListener('click', async ()
     }
 });
 
+savePricesBtn.addEventListener('click', async () => {
+    const updates = {
+        pizzas: [],
+        churrascos: [],
+        agregados: [],
+        otros_productos: []
+    };
+
+    document.querySelectorAll('.price-input').forEach(input => {
+        const table = input.dataset.table;
+        const id = parseInt(input.dataset.id);
+        const field = input.dataset.field;
+        const value = parseInt(input.value);
+
+        if (isNaN(value)) return;
+
+        let entry = updates[table].find(item => item.id === id);
+        if (!entry) {
+            entry = { id };
+            updates[table].push(entry);
+        }
+        entry[field] = value;
+    });
+
+    try {
+        const result = await window.api.updatePrices(updates);
+        if (result.success) {
+            showAlert('Precios actualizados correctamente. La aplicación se recargará para reflejar los cambios.');
+            // Recargar productos para que el catálogo y los modales tengan los precios nuevos
+             window.api.getProducts().then((products) => {
+                if (products && Object.keys(products).length > 0) {
+                    allProducts = products;
+                    displayProducts(allProducts);
+                }
+            });
+        } else {
+            showAlert(`Error al actualizar precios: ${result.message}`);
+        }
+    } catch (error) {
+        console.error('Error al guardar precios:', error);
+        showAlert('Error crítico al guardar los precios. Revise la consola.');
+    }
+});
+
+
 orderSummaryEl.addEventListener('click', (e) => { if (e.target.matches('.remove-item-btn')) { const itemId = parseFloat(e.target.dataset.id); removeFromOrder(itemId); } });
 document.querySelectorAll('input[name="delivery-type"]').forEach(radio => { radio.addEventListener('change', (e) => { if(e.target.value === 'demora') { document.getElementById('delivery-delay-input').classList.remove('hidden'); document.getElementById('delivery-scheduled-input').classList.add('hidden'); } else { document.getElementById('delivery-delay-input').classList.add('hidden'); document.getElementById('delivery-scheduled-input').classList.remove('hidden'); } }); });
 paymentMethodSelect.addEventListener('change', () => { otherPaymentWrapper.classList.toggle('hidden', paymentMethodSelect.value !== 'otra'); });
 document.querySelectorAll('input[name="payment-status"]').forEach(radio => { radio.addEventListener('change', (e) => { paymentMethodWrapper.classList.toggle('hidden', e.target.value !== 'Pagado'); }); });
-document.querySelectorAll('.tab-button').forEach(tab => { tab.addEventListener('click', () => { if (tab.disabled) return; document.querySelectorAll('.tab-button').forEach(item => { item.classList.remove('active', 'border-blue-600', 'text-blue-600', 'bg-gray-50'); item.classList.add('border-transparent', 'text-gray-500'); }); tab.classList.add('active', 'border-blue-600', 'text-blue-600'); tab.classList.remove('border-transparent', 'text-gray-500'); document.querySelectorAll('.tab-content').forEach(content => { if (content.id === tab.dataset.target) { content.classList.remove('hidden'); } else { content.classList.add('hidden'); } }); if(tab.dataset.target === 'history-tab-content') { loadOrderHistory(); } }); });
+document.querySelectorAll('.tab-button').forEach(tab => { tab.addEventListener('click', () => { if (tab.disabled) return; document.querySelectorAll('.tab-button').forEach(item => { item.classList.remove('active', 'border-blue-600', 'text-blue-600', 'bg-gray-50'); item.classList.add('border-transparent', 'text-gray-500'); }); tab.classList.add('active', 'border-blue-600', 'text-blue-600'); tab.classList.remove('border-transparent', 'text-gray-500'); document.querySelectorAll('.tab-content').forEach(content => { if (content.id === tab.dataset.target) { content.classList.remove('hidden'); } else { content.classList.add('hidden'); } }); if(tab.dataset.target === 'history-tab-content') { loadOrderHistory(); } if(tab.dataset.target === 'settings-tab-content'){ populatePriceSettings(); } }); });
 document.querySelectorAll('.sub-tab-button').forEach(tab => { tab.addEventListener('click', () => { document.querySelectorAll('.sub-tab-button').forEach(item => item.classList.remove('active', 'bg-white', 'shadow-sm')); tab.classList.add('active', 'bg-white', 'shadow-sm'); document.querySelectorAll('.sub-tab-content').forEach(content => content.classList.add('hidden')); document.getElementById(tab.dataset.target).classList.remove('hidden'); }); });
 addToOrderBtn.addEventListener('click', () => { let itemName; if (hnhCheckbox.checked && ['mediana', 'xl'].includes(currentPizzaConfig.size)) { const pizza1Name = hnhSelect1.options[hnhSelect1.selectedIndex].text.toLowerCase(); const pizza2Name = hnhSelect2.options[hnhSelect2.selectedIndex].text.toLowerCase(); baseName = `mitad ${pizza1Name}/mitad ${pizza2Name}`; } else { baseName = currentPizzaConfig.basePizza.nombre; } const sizePrefix = {xl: 'XL - ',mediana: 'M - ',chica: 'CH - '}[currentPizzaConfig.size] || ''; itemName = sizePrefix + baseName; const finalItem = { orderId: Date.now(), name: itemName, size: currentPizzaConfig.size, extras: currentPizzaConfig.extras, price: currentPizzaConfig.price, notes: document.getElementById('pizza-notes').value.trim() }; addToOrder(finalItem); pizzaModal.classList.add('hidden'); });
 document.getElementById('size-options').addEventListener('click', (e) => { if (e.target.matches('.size-button')) { currentPizzaConfig.size = e.target.dataset.size; updateModalUI(); } });

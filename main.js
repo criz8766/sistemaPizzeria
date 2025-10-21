@@ -9,6 +9,9 @@ const os = require('os');
 const xlsx = require('xlsx');
 const nodemailer = require('nodemailer');
 
+const express = require('express');
+const cors = require('cors'); //
+
 // --- CONFIGURACIÓN DE RUTAS ---
 const userDataPath = app.getPath('userData');
 const dbPath = path.join(userDataPath, 'piamonte.db');
@@ -342,6 +345,39 @@ ipcMain.handle('update-payment-status', async (event, { orderId, status, payment
   });
 });
 
+ipcMain.handle('update-prices', async (event, updates) => {
+    const db = openDb();
+    return new Promise((resolve) => {
+        db.serialize(async () => {
+            try {
+                await new Promise((res, rej) => db.run('BEGIN TRANSACTION', err => err ? rej(err) : res()));
+
+                for (const table in updates) {
+                    for (const item of updates[table]) {
+                        const fields = Object.keys(item).filter(k => k !== 'id');
+                        const setClause = fields.map(f => `${f} = ?`).join(', ');
+                        const params = fields.map(f => item[f]);
+                        params.push(item.id);
+
+                        const sql = `UPDATE ${table} SET ${setClause} WHERE id = ?`;
+                        await new Promise((res, rej) => db.run(sql, params, err => err ? rej(err) : res()));
+                    }
+                }
+
+                await new Promise((res, rej) => db.run('COMMIT', err => err ? rej(err) : res()));
+                resolve({ success: true });
+            } catch (error) {
+                console.error("Error en la transacción de actualización de precios:", error);
+                await new Promise((res, rej) => db.run('ROLLBACK', err => err ? rej(err) : res()));
+                resolve({ success: false, message: error.message });
+            } finally {
+                db.close();
+            }
+        });
+    });
+});
+
+
 // --- LÓGICA DE LA VENTANA Y CICLO DE VIDA ---
 const createWindow = () => {
   const mainWindow = new BrowserWindow({ width: 1280, height: 800, webPreferences: { preload: path.join(__dirname, 'preload.js') }, frame: false, autoHideMenuBar: true });
@@ -370,4 +406,50 @@ app.on('window-all-closed', async () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+
+// --- NUEVA SECCIÓN: SERVIDOR API PARA INVENTARIO ---
+function startApiServer() {
+    const api = express();
+    api.use(cors()); // Permite que la app de Android se conecte
+    api.use(express.json()); // Permite recibir datos en formato JSON
+    const port = 3000; // Un puerto para el servidor
+
+    // Endpoint para obtener todos los ingredientes
+    api.get('/api/ingredientes', async (req, res) => {
+        const db = openDb(true);
+        db.all('SELECT * FROM inventario ORDER BY nombre', [], (err, rows) => {
+            db.close();
+            if (err) {
+                res.status(500).json({ error: err.message });
+                return;
+            }
+            res.json(rows);
+        });
+    });
+
+    // Endpoint para actualizar un ingrediente
+    api.post('/api/ingredientes/update', async (req, res) => {
+        const { id, cantidad } = req.body;
+        const db = openDb();
+        const sql = `UPDATE inventario SET cantidad = ? WHERE id = ?`;
+        db.run(sql, [cantidad, id], function(err) {
+            db.close();
+            if (err) {
+                res.status(500).json({ error: err.message });
+                return;
+            }
+            res.json({ success: true, message: `Ingrediente ${id} actualizado.` });
+        });
+    });
+
+    api.listen(port, () => {
+        console.log(`API de inventario corriendo en http://localhost:${port}`);
+    });
+}
+
+// Llama a esta función cuando la app esté lista
+app.whenReady().then(() => {
+    createWindow();
+    startApiServer(); // Inicia el servidor API
 });

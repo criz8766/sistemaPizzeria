@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('api', {
   updatePaymentStatus: (payload) => ipcRenderer.invoke('update-payment-status', payload),
   updateOrder: (orderData) => ipcRenderer.invoke('update-order', orderData),
   deleteOrder: (orderId) => ipcRenderer.invoke('delete-order', orderId),
+  updatePrices: (updates) => ipcRenderer.invoke('update-prices', updates),
   // Funciones para los botones de la ventana
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
   maximizeWindow: () => ipcRenderer.send('maximize-window'),
