@@ -48,6 +48,10 @@ const customPizzaPriceInput = document.getElementById('custom-pizza-price-input'
 const customCancelButton = document.getElementById('custom-cancel-button');
 const customAddToOrderButton = document.getElementById('custom-add-to-order-button');
 let customPizzaSize = 'mediana';
+const inventoryContainer = document.getElementById('inventory-container');
+const inventoryTabContent = document.getElementById('inventory-tab-content');
+const saveInventoryBtn = document.getElementById('save-inventory-btn');
+
 
 // --- LÓGICA DE ALERTAS ---
 function showAlert(message) {
@@ -279,80 +283,76 @@ function collectOrderData() {
 // --- LÓGICA DE CONFIGURACIÓN ---
 function populatePriceSettings() {
     priceSettingsContainer.innerHTML = '';
-
     const createSection = (title, items, priceFields, searchable = false) => {
         const section = document.createElement('div');
         let searchInputHTML = '';
         if (searchable) {
-            searchInputHTML = `
-                <div class="mb-4">
-                    <input type="text" id="search-settings-${title.toLowerCase()}" class="w-full p-2 border rounded-lg" placeholder="Buscar en ${title}...">
-                </div>
-            `;
+            searchInputHTML = `<div class="mb-4"><input type="text" id="search-settings-${title.toLowerCase().replace(/\s+/g, '-')}" class="w-full p-2 border rounded-lg" placeholder="Buscar en ${title}..."></div>`;
         }
-
-        section.innerHTML = `
-            <h3 class="text-xl font-bold text-gray-800 mb-4 pb-2 border-b">${title}</h3>
-            ${searchInputHTML}
-        `;
+        section.innerHTML = `<h3 class="text-xl font-bold text-gray-800 mb-4 pb-2 border-b">${title}</h3>${searchInputHTML}`;
         const grid = document.createElement('div');
         grid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6';
-        grid.id = `settings-grid-${title.toLowerCase()}`;
-
+        grid.id = `settings-grid-${title.toLowerCase().replace(/\s+/g, '-')}`;
         items.forEach(item => {
             const itemEl = document.createElement('div');
             itemEl.className = 'bg-white p-4 rounded-lg shadow-sm settings-item';
             itemEl.dataset.name = item.nombre.toLowerCase();
-
-            let priceInputs = priceFields.map(field => `
-                <div class="flex items-center justify-between">
-                    <label class="text-sm text-gray-600 capitalize">${field.label}:</label>
-                    <input type="number" class="price-input w-24 p-1 border rounded text-right" data-table="${field.table}" data-id="${item.id}" data-field="${field.name}" value="${item[field.name] || 0}">
-                </div>
-            `).join('');
-
-            itemEl.innerHTML = `
-                <h4 class="font-semibold mb-2">${item.nombre}</h4>
-                <div class="space-y-2">
-                    ${priceInputs}
-                </div>
-            `;
+            let priceInputs = priceFields.map(field => `<div class="flex items-center justify-between"><label class="text-sm text-gray-600 capitalize">${field.label}:</label><input type="number" class="price-input w-24 p-1 border rounded text-right" data-table="${field.table}" data-id="${item.id}" data-field="${field.name}" value="${item[field.name] || 0}"></div>`).join('');
+            itemEl.innerHTML = `<h4 class="font-semibold mb-2">${item.nombre}</h4><div class="space-y-2">${priceInputs}</div>`;
             grid.appendChild(itemEl);
         });
         section.appendChild(grid);
         priceSettingsContainer.appendChild(section);
-
         if (searchable) {
-            document.getElementById(`search-settings-${title.toLowerCase()}`).addEventListener('input', (e) => {
+            document.getElementById(`search-settings-${title.toLowerCase().replace(/\s+/g, '-')}`).addEventListener('input', (e) => {
                 const searchTerm = e.target.value.toLowerCase();
-                document.querySelectorAll(`#settings-grid-${title.toLowerCase()} .settings-item`).forEach(item => {
+                document.querySelectorAll(`#settings-grid-${title.toLowerCase().replace(/\s+/g, '-')} .settings-item`).forEach(item => {
                     item.classList.toggle('hidden', !item.dataset.name.includes(searchTerm));
                 });
             });
         }
     };
-
-    createSection('Pizzas', allProducts.pizzas, [
-        { label: 'Chica', name: 'precio_chica', table: 'pizzas' },
-        { label: 'Mediana', name: 'precio_mediana', table: 'pizzas' },
-        { label: 'XL', name: 'precio_xl', table: 'pizzas' },
-    ], true); // Habilitar buscador para Pizzas
-
-    createSection('Churrascos', allProducts.churrascos, [
-        { label: 'Precio', name: 'precio', table: 'churrascos' },
-    ]);
-
-    createSection('Agregados', allProducts.agregados, [
-        { label: 'Ind.', name: 'precio_individual', table: 'agregados' },
-        { label: 'Med.', name: 'precio_mediana', table: 'agregados' },
-        { label: 'XL', name: 'precio_xl', table: 'agregados' },
-    ]);
-
+    createSection('Pizzas', allProducts.pizzas, [{ label: 'Chica', name: 'precio_chica', table: 'pizzas' }, { label: 'Mediana', name: 'precio_mediana', table: 'pizzas' }, { label: 'XL', name: 'precio_xl', table: 'pizzas' }], true);
+    createSection('Churrascos', allProducts.churrascos, [{ label: 'Precio', name: 'precio', table: 'churrascos' }]);
+    createSection('Agregados', allProducts.agregados, [{ label: 'Ind.', name: 'precio_individual', table: 'agregados' }, { label: 'Med.', name: 'precio_mediana', table: 'agregados' }, { label: 'XL', name: 'precio_xl', table: 'agregados' }]);
     const otrosGrouped = groupByCategory(allProducts.otros);
     for (const categoria in otrosGrouped) {
-        createSection(categoria, otrosGrouped[categoria], [
-            { label: 'Precio', name: 'precio', table: 'otros_productos' },
-        ]);
+        createSection(categoria, otrosGrouped[categoria], [{ label: 'Precio', name: 'precio', table: 'otros_productos' }]);
+    }
+}
+
+// --- LÓGICA DE INVENTARIO ---
+function groupInventoryByCategory(items) {
+    return items.reduce((acc, item) => {
+        const key = item.categoria || 'General';
+        if (!acc[key]) { acc[key] = []; }
+        acc[key].push(item);
+        return acc;
+    }, {});
+}
+
+async function populateInventory() {
+    inventoryContainer.innerHTML = '';
+    try {
+        const inventory = await window.api.getInventory();
+        const grouped = groupInventoryByCategory(inventory);
+        for (const categoria in grouped) {
+            const section = document.createElement('div');
+            section.innerHTML = `<h3 class="text-xl font-bold text-gray-800 mb-3">${categoria}</h3>`;
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4';
+            grouped[categoria].forEach(item => {
+                const itemEl = document.createElement('div');
+                itemEl.className = 'bg-white p-3 rounded-lg shadow-sm flex items-center justify-between';
+                itemEl.innerHTML = `<label class="font-semibold text-sm">${item.nombre}</label><input type="text" class="inventory-input w-28 p-1 border rounded text-right" data-id="${item.id}" value="${item.cantidad}">`;
+                grid.appendChild(itemEl);
+            });
+            section.appendChild(grid);
+            inventoryContainer.appendChild(section);
+        }
+    } catch (error) {
+        console.error("Error al poblar inventario:", error);
+        inventoryContainer.innerHTML = '<p class="text-red-500">No se pudo cargar el inventario.</p>';
     }
 }
 
@@ -442,10 +442,7 @@ historyListEl.addEventListener('click', async (e) => {
     }
 });
 
-document.getElementById('delete-cancel-btn').addEventListener('click', () => {
-    confirmDeleteModal.classList.add('hidden');
-    orderToDeleteId = null;
-});
+document.getElementById('delete-cancel-btn').addEventListener('click', () => { confirmDeleteModal.classList.add('hidden'); orderToDeleteId = null; });
 
 document.getElementById('delete-confirm-btn').addEventListener('click', async () => {
     if (orderToDeleteId) {
@@ -462,55 +459,61 @@ document.getElementById('delete-confirm-btn').addEventListener('click', async ()
 });
 
 savePricesBtn.addEventListener('click', async () => {
-    const updates = {
-        pizzas: [],
-        churrascos: [],
-        agregados: [],
-        otros_productos: []
-    };
-
+    const updates = { pizzas: [], churrascos: [], agregados: [], otros_productos: [] };
     document.querySelectorAll('.price-input').forEach(input => {
         const table = input.dataset.table;
         const id = parseInt(input.dataset.id);
         const field = input.dataset.field;
         const value = parseInt(input.value);
-
         if (isNaN(value)) return;
-
         let entry = updates[table].find(item => item.id === id);
-        if (!entry) {
-            entry = { id };
-            updates[table].push(entry);
-        }
+        if (!entry) { entry = { id }; updates[table].push(entry); }
         entry[field] = value;
     });
-
     try {
         const result = await window.api.updatePrices(updates);
         if (result.success) {
-            showAlert('Precios actualizados correctamente. La aplicación se recargará para reflejar los cambios.');
-            // Recargar productos para que el catálogo y los modales tengan los precios nuevos
-             window.api.getProducts().then((products) => {
-                if (products && Object.keys(products).length > 0) {
-                    allProducts = products;
-                    displayProducts(allProducts);
-                }
-            });
+            showAlert('Precios actualizados correctamente. Los cambios se reflejarán inmediatamente.');
+            window.api.getProducts().then(products => { if (products && Object.keys(products).length > 0) { allProducts = products; displayProducts(allProducts); } });
         } else {
             showAlert(`Error al actualizar precios: ${result.message}`);
         }
-    } catch (error) {
-        console.error('Error al guardar precios:', error);
-        showAlert('Error crítico al guardar los precios. Revise la consola.');
+    } catch (error) { console.error('Error al guardar precios:', error); showAlert('Error crítico al guardar los precios. Revise la consola.'); }
+});
+
+saveInventoryBtn.addEventListener('click', async () => {
+    const updates = [];
+    document.querySelectorAll('.inventory-input').forEach(input => {
+        updates.push({ id: parseInt(input.dataset.id), cantidad: input.value });
+    });
+    const result = await window.api.updateInventory(updates);
+    if (result.success) {
+        showAlert('Inventario actualizado correctamente.');
+    } else {
+        showAlert(`Error al actualizar el inventario: ${result.message}`);
     }
 });
 
-
 orderSummaryEl.addEventListener('click', (e) => { if (e.target.matches('.remove-item-btn')) { const itemId = parseFloat(e.target.dataset.id); removeFromOrder(itemId); } });
-document.querySelectorAll('input[name="delivery-type"]').forEach(radio => { radio.addEventListener('change', (e) => { if(e.target.value === 'demora') { document.getElementById('delivery-delay-input').classList.remove('hidden'); document.getElementById('delivery-scheduled-input').classList.add('hidden'); } else { document.getElementById('delivery-delay-input').classList.add('hidden'); document.getElementById('delivery-scheduled-input').classList.remove('hidden'); } }); });
+document.querySelectorAll('input[name="delivery-type"]').forEach(radio => { radio.addEventListener('change', (e) => { if (e.target.value === 'demora') { document.getElementById('delivery-delay-input').classList.remove('hidden'); document.getElementById('delivery-scheduled-input').classList.add('hidden'); } else { document.getElementById('delivery-delay-input').classList.add('hidden'); document.getElementById('delivery-scheduled-input').classList.remove('hidden'); } }); });
 paymentMethodSelect.addEventListener('change', () => { otherPaymentWrapper.classList.toggle('hidden', paymentMethodSelect.value !== 'otra'); });
 document.querySelectorAll('input[name="payment-status"]').forEach(radio => { radio.addEventListener('change', (e) => { paymentMethodWrapper.classList.toggle('hidden', e.target.value !== 'Pagado'); }); });
-document.querySelectorAll('.tab-button').forEach(tab => { tab.addEventListener('click', () => { if (tab.disabled) return; document.querySelectorAll('.tab-button').forEach(item => { item.classList.remove('active', 'border-blue-600', 'text-blue-600', 'bg-gray-50'); item.classList.add('border-transparent', 'text-gray-500'); }); tab.classList.add('active', 'border-blue-600', 'text-blue-600'); tab.classList.remove('border-transparent', 'text-gray-500'); document.querySelectorAll('.tab-content').forEach(content => { if (content.id === tab.dataset.target) { content.classList.remove('hidden'); } else { content.classList.add('hidden'); } }); if(tab.dataset.target === 'history-tab-content') { loadOrderHistory(); } if(tab.dataset.target === 'settings-tab-content'){ populatePriceSettings(); } }); });
+
+document.querySelectorAll('.tab-button').forEach(tab => {
+  tab.addEventListener('click', () => {
+    if (tab.disabled) return;
+    document.querySelectorAll('.tab-button').forEach(item => { item.classList.remove('active', 'border-blue-600', 'text-blue-600', 'bg-gray-50'); item.classList.add('border-transparent', 'text-gray-500'); });
+    tab.classList.add('active', 'border-blue-600', 'text-blue-600');
+    tab.classList.remove('border-transparent', 'text-gray-500');
+    document.querySelectorAll('.tab-content').forEach(content => { content.classList.add('hidden'); });
+    const targetContent = document.getElementById(tab.dataset.target);
+    if (targetContent) { targetContent.classList.remove('hidden'); }
+    if (tab.dataset.target === 'history-tab-content') { loadOrderHistory(); }
+    if (tab.dataset.target === 'settings-tab-content') { populatePriceSettings(); }
+    if (tab.dataset.target === 'inventory-tab-content') { populateInventory(); }
+  });
+});
+
 document.querySelectorAll('.sub-tab-button').forEach(tab => { tab.addEventListener('click', () => { document.querySelectorAll('.sub-tab-button').forEach(item => item.classList.remove('active', 'bg-white', 'shadow-sm')); tab.classList.add('active', 'bg-white', 'shadow-sm'); document.querySelectorAll('.sub-tab-content').forEach(content => content.classList.add('hidden')); document.getElementById(tab.dataset.target).classList.remove('hidden'); }); });
 addToOrderBtn.addEventListener('click', () => { let itemName; if (hnhCheckbox.checked && ['mediana', 'xl'].includes(currentPizzaConfig.size)) { const pizza1Name = hnhSelect1.options[hnhSelect1.selectedIndex].text.toLowerCase(); const pizza2Name = hnhSelect2.options[hnhSelect2.selectedIndex].text.toLowerCase(); baseName = `mitad ${pizza1Name}/mitad ${pizza2Name}`; } else { baseName = currentPizzaConfig.basePizza.nombre; } const sizePrefix = {xl: 'XL - ',mediana: 'M - ',chica: 'CH - '}[currentPizzaConfig.size] || ''; itemName = sizePrefix + baseName; const finalItem = { orderId: Date.now(), name: itemName, size: currentPizzaConfig.size, extras: currentPizzaConfig.extras, price: currentPizzaConfig.price, notes: document.getElementById('pizza-notes').value.trim() }; addToOrder(finalItem); pizzaModal.classList.add('hidden'); });
 document.getElementById('size-options').addEventListener('click', (e) => { if (e.target.matches('.size-button')) { currentPizzaConfig.size = e.target.dataset.size; updateModalUI(); } });
@@ -593,6 +596,17 @@ document.addEventListener('DOMContentLoaded', () => {
     console.error("Error al llamar a getProducts:", error);
     showAlert("Error crítico al cargar productos. Revise la consola.");
   });
+
+  // --- ESCUCHA PARA ACTUALIZACIÓN EN TIEMPO REAL ---
+  window.api.onInventoryUpdate(() => {
+      console.log('Señal de actualización de inventario recibida.');
+      // Revisa si la pestaña de inventario está activa antes de recargar
+      if (!inventoryTabContent.classList.contains('hidden')) {
+          console.log('Actualizando la vista del inventario...');
+          populateInventory();
+      }
+  });
+
   document.getElementById('minimize-btn').addEventListener('click', () => { window.api.minimizeWindow(); });
   document.getElementById('maximize-btn').addEventListener('click', () => { window.api.maximizeWindow(); });
   document.getElementById('close-btn').addEventListener('click', () => { window.api.closeWindow(); });

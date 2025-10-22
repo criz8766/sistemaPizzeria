@@ -147,6 +147,7 @@
           <div class="flex border-b">
             <button class="tab-button active py-2 px-6 font-semibold border-b-4" data-target="catalog-tab-content">Catálogo</button>
             <button class="tab-button py-2 px-6 font-semibold border-b-4 border-transparent text-gray-500 hover:text-blue-600" data-target="history-tab-content">Historial</button>
+            <button class="tab-button py-2 px-6 font-semibold border-b-4 border-transparent text-gray-500 hover:text-blue-600" data-target="inventory-tab-content">Inventario</button>
             <button class="tab-button py-2 px-6 font-semibold border-b-4 border-transparent text-gray-500 hover:text-blue-600" data-target="settings-tab-content">Configuración</button>
           </div>
         </div>
@@ -181,6 +182,15 @@
             <div id="history-list" class="space-y-4"></div>
           </div>
           
+          <div id="inventory-tab-content" class="tab-content hidden p-6">
+              <div class="flex justify-between items-center mb-6 border-b pb-4">
+                  <h2 class="text-2xl font-bold">Gestión de Inventario</h2>
+                  <button id="save-inventory-btn" class="bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-blue-700 transition-colors">Guardar Cambios</button>
+              </div>
+              <div id="inventory-container" class="space-y-6">
+                  </div>
+          </div>
+
           <div id="settings-tab-content" class="tab-content hidden p-6">
             <div class="flex justify-between items-center mb-6 border-b pb-4">
                 <h2 class="text-2xl font-bold">Configuración de Precios</h2>
@@ -232,7 +242,6 @@
           <div class="flex gap-4 mt-4"><button id="payment-cancel-btn" class="w-full px-6 py-2 bg-gray-300 rounded-lg font-semibold hover:bg-gray-400">Cancelar</button><button id="payment-confirm-btn" class="w-full px-6 py-2 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600">Confirmar Pago</button></div>
         </div>
     </div>
-    
     <div id="custom-pizza-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4">
         <div class="bg-white p-6 rounded-lg shadow-xl w-1/2 max-w-lg">
           <h2 class="text-3xl font-bold mb-4">Pizza Personalizada</h2>
@@ -258,7 +267,6 @@
           </div>
         </div>
     </div>
-    
     <div id="confirm-delete-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: 9998;">
         <div class="bg-white p-6 rounded-lg shadow-xl w-1/3 max-w-sm">
           <h2 class="text-xl font-bold mb-4">Confirmar Eliminación</h2>
@@ -269,7 +277,6 @@
           </div>
         </div>
     </div>
-
     <div id="alert-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: 9999;">
         <div class="bg-white p-6 rounded-lg shadow-xl w-1/3 max-w-sm">
           <h2 class="text-xl font-bold mb-4">Aviso</h2>

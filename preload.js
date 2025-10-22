@@ -2,6 +2,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
+  // Funciones de productos y pedidos
   getProducts: () => ipcRenderer.invoke('get-products'),
   generateTicket: (orderData) => ipcRenderer.invoke('generate-ticket', orderData),
   confirmPrint: (payload) => ipcRenderer.invoke('confirm-print', payload),
@@ -12,8 +13,16 @@ contextBridge.exposeInMainWorld('api', {
   updatePaymentStatus: (payload) => ipcRenderer.invoke('update-payment-status', payload),
   updateOrder: (orderData) => ipcRenderer.invoke('update-order', orderData),
   deleteOrder: (orderId) => ipcRenderer.invoke('delete-order', orderId),
+  
+  // Funciones de configuración
   updatePrices: (updates) => ipcRenderer.invoke('update-prices', updates),
-  // Funciones para los botones de la ventana
+
+  // Funciones de inventario
+  getInventory: () => ipcRenderer.invoke('get-inventory'),
+  updateInventory: (updates) => ipcRenderer.invoke('update-inventory', updates),
+  onInventoryUpdate: (callback) => ipcRenderer.on('inventory-updated', callback),
+
+  // Funciones de la ventana
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
   maximizeWindow: () => ipcRenderer.send('maximize-window'),
   closeWindow: () => ipcRenderer.send('close-window')

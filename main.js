@@ -8,9 +8,12 @@ const fs = require('fs');
 const os = require('os');
 const xlsx = require('xlsx');
 const nodemailer = require('nodemailer');
-
 const express = require('express');
-const cors = require('cors'); //
+const cors = require('cors');
+const { Bonjour } = require('bonjour-service');
+
+// --- VARIABLE GLOBAL PARA LA VENTANA PRINCIPAL ---
+let mainWindow;
 
 // --- CONFIGURACIÓN DE RUTAS ---
 const userDataPath = app.getPath('userData');
@@ -159,10 +162,10 @@ ipcMain.handle('update-order', async (event, orderData) => {
     const params = [ orderData.customer.name, orderData.customer.phone, orderData.total, itemsJson, orderData.timestamp, orderData.delivery.type, orderData.delivery.time, orderData.payment.method, orderData.payment.status, orderData.id ];
     return new Promise((resolve) => {
         db.run(sql, params, function (err) {
+            db.close();
             if (err) { console.error("Error al actualizar pedido:", err.message); resolve(false); } 
             else { console.log(`Pedido #${orderData.id} actualizado correctamente.`); resolve(true); }
         });
-        db.close();
     });
 });
 
@@ -238,77 +241,46 @@ async function generateDailyReport(autoSavePath = null) {
 
 ipcMain.handle('generate-report', () => generateDailyReport());
 
-// --> FUNCIÓN MODIFICADA: Se separa la lógica de guardado local y envío de email
 async function saveAndSendReport() {
     const today = getLocalDate();
-    
-    // 1. Definir rutas para el respaldo local
     const desktopPath = app.getPath('desktop');
     const reportsFolderPath = path.join(desktopPath, 'reportes');
     if (!fs.existsSync(reportsFolderPath)) {
         fs.mkdirSync(reportsFolderPath);
     }
     const localReportPath = path.join(reportsFolderPath, `Reporte-Piamonte-${today}.xlsx`);
-
-    // 2. Generar y guardar el reporte localmente SIEMPRE
     const localReportResult = await generateDailyReport(localReportPath);
     if (!localReportResult.success) {
-        dialog.showMessageBoxSync({
-            type: 'info',
-            title: 'Sin Reporte',
-            message: 'No se encontraron ventas el día de hoy. No se generó ningún reporte.'
-        });
-        return; // No hay nada más que hacer si no hubo ventas
+        dialog.showMessageBoxSync({ type: 'info', title: 'Sin Reporte', message: 'No se encontraron ventas el día de hoy. No se generó ningún reporte.' });
+        return;
     }
-    
-    dialog.showMessageBoxSync({
-        type: 'info',
-        title: 'Respaldo Local Creado',
-        message: `El reporte de ventas se ha guardado en la carpeta "reportes" de tu Escritorio.`
-    });
-
-    // 3. Intentar enviar el reporte por correo
+    dialog.showMessageBoxSync({ type: 'info', title: 'Respaldo Local Creado', message: `El reporte de ventas se ha guardado en la carpeta "reportes" de tu Escritorio.` });
     if (!process.env.SENDGRID_API_KEY) {
         console.log('No se encontró API Key de SendGrid. Omitiendo envío de correo.');
         return;
     }
-
     const transporter = nodemailer.createTransport({ host: 'smtp.sendgrid.net', port: 587, auth: { user: 'apikey', pass: process.env.SENDGRID_API_KEY } });
     try {
         await transporter.sendMail({ from: process.env.EMAIL_FROM, to: process.env.EMAIL_TO, subject: `Reporte de Ventas Piamonte - ${today}`, text: 'Adjunto se encuentra el reporte de ventas del día.', attachments: [{ filename: `Reporte-Piamonte-${today}.xlsx`, path: localReportPath }] });
         console.log('Correo de reporte enviado exitosamente.');
-        dialog.showMessageBoxSync({
-            type: 'info',
-            title: 'Reporte Enviado por Correo',
-            message: 'El reporte de ventas también fue enviado exitosamente al correo configurado.'
-        });
+        dialog.showMessageBoxSync({ type: 'info', title: 'Reporte Enviado por Correo', message: 'El reporte de ventas también fue enviado exitosamente al correo configurado.' });
     } catch (error) {
         console.error('Error al enviar el correo:', error);
-        dialog.showMessageBoxSync({
-            type: 'error',
-            title: 'Error al Enviar Reporte por Correo',
-            message: 'No se pudo enviar el reporte por correo. Por favor, revisa tu conexión a internet y las credenciales.',
-            detail: error.message
-        });
+        dialog.showMessageBoxSync({ type: 'error', title: 'Error al Enviar Reporte por Correo', message: 'No se pudo enviar el reporte por correo.', detail: error.message });
     }
 }
-
 
 async function clearOrdersTable() {
     console.log('Limpiando y reseteando la tabla de pedidos...');
     const db = openDb();
-    const run = (sql) => new Promise((resolve, reject) => {
-        db.run(sql, [], function(err) { if (err) return reject(err); resolve(this); });
-    });
+    const run = (sql) => new Promise((resolve, reject) => { db.run(sql, [], function(err) { if (err) return reject(err); resolve(this); }); });
     try {
         await run(`DELETE FROM pedidos`);
         await run(`DELETE FROM sqlite_sequence WHERE name='pedidos'`);
     } catch (err) {
         console.error('Error durante la limpieza de la tabla:', err.message);
     } finally {
-        db.close((err) => {
-            if (err) console.error('Error al cerrar la DB después de limpiar:', err.message);
-        });
+        db.close((err) => { if (err) console.error('Error al cerrar la DB después de limpiar:', err.message); });
     }
 }
 
@@ -326,10 +298,11 @@ ipcMain.handle('get-todays-orders', async () => {
 ipcMain.handle('update-order-status', async (event, { orderId, status }) => {
   const db = openDb();
   const sql = `UPDATE pedidos SET estado = ? WHERE id = ?`;
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     db.run(sql, [status, orderId], function(err) {
-      if (err) { console.error("Error al actualizar estado:", err.message); db.close(); return reject(false); }
-      db.close((closeErr) => { if (closeErr) { console.error("Error al cerrar DB:", closeErr.message); return reject(false); } resolve(true); });
+      db.close();
+      if (err) { console.error("Error al actualizar estado:", err.message); resolve(false); }
+      else { resolve(true); }
     });
   });
 });
@@ -337,10 +310,11 @@ ipcMain.handle('update-order-status', async (event, { orderId, status }) => {
 ipcMain.handle('update-payment-status', async (event, { orderId, status, paymentMethod }) => {
   const db = openDb();
   const sql = `UPDATE pedidos SET estado_pago = ?, forma_pago = ? WHERE id = ?`;
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     db.run(sql, [status, paymentMethod, orderId], function(err) {
-      if (err) { console.error("Error al actualizar pago:", err.message); db.close(); return reject(false); }
-      db.close((closeErr) => { if (closeErr) { console.error("Error al cerrar DB:", closeErr.message); return reject(false); } resolve(true); });
+        db.close();
+        if (err) { console.error("Error al actualizar pago:", err.message); resolve(false); }
+        else { resolve(true); }
     });
   });
 });
@@ -351,19 +325,16 @@ ipcMain.handle('update-prices', async (event, updates) => {
         db.serialize(async () => {
             try {
                 await new Promise((res, rej) => db.run('BEGIN TRANSACTION', err => err ? rej(err) : res()));
-
                 for (const table in updates) {
                     for (const item of updates[table]) {
                         const fields = Object.keys(item).filter(k => k !== 'id');
                         const setClause = fields.map(f => `${f} = ?`).join(', ');
                         const params = fields.map(f => item[f]);
                         params.push(item.id);
-
                         const sql = `UPDATE ${table} SET ${setClause} WHERE id = ?`;
                         await new Promise((res, rej) => db.run(sql, params, err => err ? rej(err) : res()));
                     }
                 }
-
                 await new Promise((res, rej) => db.run('COMMIT', err => err ? rej(err) : res()));
                 resolve({ success: true });
             } catch (error) {
@@ -377,10 +348,110 @@ ipcMain.handle('update-prices', async (event, updates) => {
     });
 });
 
+ipcMain.handle('get-inventory', async () => {
+  const db = openDb(true);
+  return new Promise((resolve, reject) => {
+    db.all('SELECT * FROM inventario ORDER BY categoria, nombre', [], (err, rows) => {
+      db.close();
+      if (err) reject(err);
+      else resolve(rows);
+    });
+  });
+});
+
+ipcMain.handle('update-inventory', async (event, updates) => {
+    const db = openDb();
+    return new Promise((resolve) => {
+        db.serialize(async () => {
+            try {
+                await new Promise((res, rej) => db.run('BEGIN TRANSACTION', err => err ? rej(err) : res()));
+                for (const item of updates) {
+                    const sql = `UPDATE inventario SET cantidad = ? WHERE id = ?`;
+                    await new Promise((res, rej) => db.run(sql, [item.cantidad, item.id], err => err ? rej(err) : res()));
+                }
+                await new Promise((res, rej) => db.run('COMMIT', err => err ? rej(err) : res()));
+                resolve({ success: true });
+            } catch (error) {
+                console.error("Error en la transacción de actualización de inventario:", error);
+                await new Promise((res, rej) => db.run('ROLLBACK', err => err ? rej(err) : res()));
+                resolve({ success: false, message: error.message });
+            } finally {
+                db.close();
+            }
+        });
+    });
+});
+
+
+function startApiServer() {
+    const api = express();
+    api.use(cors());
+    api.use(express.json());
+    const port = 3000;
+
+    // --- ¡NUEVO! ENDPOINT DE HEARTBEAT ---
+    api.get('/ping', (req, res) => {
+        res.status(200).send('pong');
+    });
+
+    // Endpoints de la API
+    api.get('/api/ingredientes', (req, res) => {
+        const db = openDb(true);
+        db.all('SELECT * FROM inventario ORDER BY categoria, nombre', [], (err, rows) => {
+            db.close();
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows);
+        });
+    });
+
+    api.post('/api/ingredientes/update', (req, res) => {
+        const updates = Array.isArray(req.body) ? req.body : [req.body];
+        const db = openDb();
+        db.serialize(async () => {
+            try {
+                await new Promise((res, rej) => db.run('BEGIN TRANSACTION', err => err ? rej(err) : res()));
+                for(const item of updates) {
+                    const { id, cantidad } = item;
+                    const sql = `UPDATE inventario SET cantidad = ? WHERE id = ?`;
+                    await new Promise((res, rej) => db.run(sql, [cantidad, id], err => err ? rej(err) : res()));
+                }
+                await new Promise((res, rej) => db.run('COMMIT', err => err ? rej(err) : res()));
+                if (mainWindow) {
+                    mainWindow.webContents.send('inventory-updated');
+                }
+                res.json({ success: true, message: 'Inventario actualizado.' });
+            } catch (error) {
+                console.error("Error en API /api/ingredientes/update:", error);
+                await new Promise((res, rej) => db.run('ROLLBACK', err => err ? rej(err) : res()));
+                res.status(500).json({ success: false, message: error.message });
+            } finally {
+                db.close();
+            }
+        });
+    });
+
+    api.listen(port, () => {
+        console.log(`API de inventario corriendo en http://localhost:${port}`);
+        
+        try {
+            bonjour = new Bonjour();
+            bonjour.publish({
+                name: 'Piamonte API Server',
+                type: 'http',
+                port: port,
+                txt: { service: 'piamonte-inventario-api' }
+            });
+            console.log('Servicio de inventario anunciado en la red local.');
+        } catch (error) {
+            console.error("Error al anunciar el servicio Bonjour:", error);
+        }
+    });
+}
+
 
 // --- LÓGICA DE LA VENTANA Y CICLO DE VIDA ---
 const createWindow = () => {
-  const mainWindow = new BrowserWindow({ width: 1280, height: 800, webPreferences: { preload: path.join(__dirname, 'preload.js') }, frame: false, autoHideMenuBar: true });
+  mainWindow = new BrowserWindow({ width: 1280, height: 800, webPreferences: { preload: path.join(__dirname, 'preload.js') }, frame: false, autoHideMenuBar: true });
   
   if (app.isPackaged) {
     Menu.setApplicationMenu(null);
@@ -393,63 +464,26 @@ ipcMain.on('minimize-window', () => { const w = BrowserWindow.getFocusedWindow()
 ipcMain.on('maximize-window', () => { const w = BrowserWindow.getFocusedWindow(); if (w) { if (w.isMaximized()) w.unmaximize(); else w.maximize(); } });
 ipcMain.on('close-window', () => { const w = BrowserWindow.getFocusedWindow(); if (w) w.close(); });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+    createWindow();
+    startApiServer();
+});
 
-app.on('window-all-closed', async () => {
+app.on('will-quit', () => {
+  if (bonjour) {
+    console.log('Deteniendo el anuncio del servicio en la red.');
+    bonjour.unpublishAll(() => {
+        bonjour.destroy();
+    });
+  }
+});
+
+app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    // --> LLAMADA A LA NUEVA FUNCIÓN CENTRALIZADA
-    await saveAndSendReport();
-    await clearOrdersTable();
     app.quit();
   }
 });
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
-});
-
-// --- NUEVA SECCIÓN: SERVIDOR API PARA INVENTARIO ---
-function startApiServer() {
-    const api = express();
-    api.use(cors()); // Permite que la app de Android se conecte
-    api.use(express.json()); // Permite recibir datos en formato JSON
-    const port = 3000; // Un puerto para el servidor
-
-    // Endpoint para obtener todos los ingredientes
-    api.get('/api/ingredientes', async (req, res) => {
-        const db = openDb(true);
-        db.all('SELECT * FROM inventario ORDER BY nombre', [], (err, rows) => {
-            db.close();
-            if (err) {
-                res.status(500).json({ error: err.message });
-                return;
-            }
-            res.json(rows);
-        });
-    });
-
-    // Endpoint para actualizar un ingrediente
-    api.post('/api/ingredientes/update', async (req, res) => {
-        const { id, cantidad } = req.body;
-        const db = openDb();
-        const sql = `UPDATE inventario SET cantidad = ? WHERE id = ?`;
-        db.run(sql, [cantidad, id], function(err) {
-            db.close();
-            if (err) {
-                res.status(500).json({ error: err.message });
-                return;
-            }
-            res.json({ success: true, message: `Ingrediente ${id} actualizado.` });
-        });
-    });
-
-    api.listen(port, () => {
-        console.log(`API de inventario corriendo en http://localhost:${port}`);
-    });
-}
-
-// Llama a esta función cuando la app esté lista
-app.whenReady().then(() => {
-    createWindow();
-    startApiServer(); // Inicia el servidor API
 });

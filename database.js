@@ -78,6 +78,16 @@ db.run(`CREATE TABLE IF NOT EXISTS pedidos (
   console.log("Tabla 'pedidos' creada o ya existente.");
 });
 
+db.run(`CREATE TABLE IF NOT EXISTS inventario (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre TEXT NOT NULL UNIQUE,
+    cantidad TEXT NOT NULL DEFAULT '0',
+    categoria TEXT
+  )`, (err) => {
+    if (err) return console.error("Error al crear tabla inventario", err.message);
+    console.log("Tabla 'inventario' creada o ya existente.");
+  });
+
   // --- INSERCIÓN DE DATOS (SOLO SI ES NECESARIO) ---
   // Usamos INSERT OR IGNORE para no insertar duplicados si ejecutas el script de nuevo.
 
@@ -219,6 +229,97 @@ db.run(`CREATE TABLE IF NOT EXISTS pedidos (
     stmtChurrascos.run(item.nombre, item.ingredientes, item.precio);
   }
   stmtChurrascos.finalize();
+
+  const inventarioInicial = [
+    // PIZZAS
+    { nombre: 'Aceitunas', cantidad: '4', categoria: 'Pizzas' },
+    { nombre: 'Aji', cantidad: '7', categoria: 'Pizzas' },
+    { nombre: 'Ajo', cantidad: '1', categoria: 'Pizzas' },
+    { nombre: 'Alcaparras', cantidad: '2', categoria: 'Pizzas' },
+    { nombre: 'Camarones', cantidad: '3', categoria: 'Pizzas' },
+    { nombre: 'Choclo', cantidad: '1', categoria: 'Pizzas' },
+    { nombre: 'Carne churrasco', cantidad: 'queda', categoria: 'Pizzas' },
+    { nombre: 'Choricillo', cantidad: '0', categoria: 'Pizzas' },
+    { nombre: 'Carne molida pote', cantidad: '0', categoria: 'Pizzas' },
+    { nombre: 'Champiñones', cantidad: '4 tarro', categoria: 'Pizzas' },
+    { nombre: 'Choritos', cantidad: '2', categoria: 'Pizzas' },
+    { nombre: 'Machas', cantidad: 'medio bajo', categoria: 'Pizzas' },
+    { nombre: 'Empanadas', cantidad: '0', categoria: 'Pizzas' },
+    { nombre: 'Esparragos', cantidad: '4 bolsas llenas', categoria: 'Pizzas' },
+    { nombre: 'Fondo alcachofa', cantidad: '0', categoria: 'Pizzas' },
+    { nombre: 'Jamon', cantidad: '1', categoria: 'Pizzas' },
+    { nombre: 'Lomito', cantidad: 'bastante', categoria: 'Pizzas' },
+    { nombre: 'Longaniza', cantidad: 'queda', categoria: 'Pizzas' },
+    { nombre: 'Masa', cantidad: '3,3', categoria: 'Pizzas' },
+    { nombre: 'Morron', cantidad: '2', categoria: 'Pizzas' },
+    { nombre: 'Palmito', cantidad: '5', categoria: 'Pizzas' },
+    { nombre: 'Pepperoni', cantidad: '1 bolsa', categoria: 'Pizzas' },
+    { nombre: 'Piña', cantidad: '0', categoria: 'Pizzas' },
+    { nombre: 'Poroto verde', cantidad: '1 bolsa llena', categoria: 'Pizzas' },
+    { nombre: 'Pollo potes', cantidad: '9', categoria: 'Pizzas' },
+    { nombre: 'Queso', cantidad: 'harto', categoria: 'Pizzas' },
+    { nombre: 'Salame', cantidad: '1 bolsa', categoria: 'Pizzas' },
+    { nombre: 'S. Tomate bolsas', cantidad: '5', categoria: 'Pizzas' },
+    { nombre: 'Tocino', cantidad: '1', categoria: 'Pizzas' },
+    { nombre: 'Tomate', cantidad: 'harto', categoria: 'Pizzas' },
+    { nombre: 'Bolsa orégano', cantidad: '1/2', categoria: 'Pizzas' },
+    // CHURRASCOS
+    { nombre: 'Champi churrasco', cantidad: '1', categoria: 'Churrascos' },
+    { nombre: 'Huevo para mayo bolsa', cantidad: '1', categoria: 'Churrascos' },
+    { nombre: 'Palta', cantidad: '10', categoria: 'Churrascos' },
+    { nombre: 'Pan churrasco', cantidad: '9', categoria: 'Churrascos' },
+    { nombre: 'Pollo porcionado', cantidad: 'caleta', categoria: 'Churrascos' },
+    { nombre: 'Queso churrasco', cantidad: '9 porciones', categoria: 'Churrascos' },
+    { nombre: 'Limon', cantidad: 'harto', categoria: 'Churrascos' },
+    // PASTAS
+    { nombre: 'Capeletti', cantidad: '4', categoria: 'Pastas' },
+    { nombre: 'Crema', cantidad: '1', categoria: 'Pastas' },
+    { nombre: 'Lasaña', cantidad: '16', categoria: 'Pastas' },
+    { nombre: 'Noquis', cantidad: 'medio', categoria: 'Pastas' },
+    { nombre: 'Pasta', cantidad: '8', categoria: 'Pastas' },
+    { nombre: 'Pesto', cantidad: 'queda', categoria: 'Pastas' },
+    // ENVASES / BOLSAS
+    { nombre: 'B. Grandes pizza', cantidad: 'hartas', categoria: 'Envases' },
+    { nombre: 'B. Chicas lasaña', cantidad: 'hartas', categoria: 'Envases' },
+    { nombre: 'Bolso chico llevar', cantidad: 'quedan', categoria: 'Envases' },
+    { nombre: 'Bolso grande llevar', cantidad: 'quedan', categoria: 'Envases' },
+    { nombre: 'Pote chico para llevar plástico', cantidad: 'poco', categoria: 'Envases' },
+    { nombre: 'Pote lasañas', cantidad: 'hartos', categoria: 'Envases' },
+    // DESPENSA
+    { nombre: 'Aceite', cantidad: '2', categoria: 'Despensa' },
+    { nombre: 'Arroz', cantidad: '1 3/4', categoria: 'Despensa' },
+    { nombre: 'Azucar', cantidad: '2', categoria: 'Despensa' },
+    { nombre: 'Caldo maggi', cantidad: '0', categoria: 'Despensa' },
+    { nombre: 'Fideos', cantidad: '5', categoria: 'Despensa' },
+    { nombre: 'Pimienta', cantidad: '1', categoria: 'Despensa' },
+    { nombre: 'Sal', cantidad: '10', categoria: 'Despensa' },
+    { nombre: 'Salsa carne', cantidad: '1', categoria: 'Despensa' },
+    // VARIOS
+    { nombre: 'Alusa', cantidad: 'queda', categoria: 'Varios' },
+    { nombre: 'Papel aluminio', cantidad: '1 y medio', categoria: 'Varios' },
+    { nombre: 'Papel nova', cantidad: '0', categoria: 'Varios' },
+    { nombre: 'Pegote', cantidad: '0', categoria: 'Varios' },
+    { nombre: 'Plumon', cantidad: 'le queda', categoria: 'Varios' },
+    // ASEO
+    { nombre: 'Birutilla', cantidad: '1', categoria: 'Aseo' },
+    { nombre: 'Cloro', cantidad: '2', categoria: 'Aseo' },
+    { nombre: 'Cif', cantidad: 'mitad', categoria: 'Aseo' },
+    { nombre: 'Esponja', cantidad: '4', categoria: 'Aseo' },
+    { nombre: 'Guantes', cantidad: 'hay', categoria: 'Aseo' },
+    { nombre: 'Jabón', cantidad: '2', categoria: 'Aseo' },
+    { nombre: 'Limpiapisos', cantidad: '3/4', categoria: 'Aseo' },
+    { nombre: 'Liquido ventana', cantidad: 'lleno', categoria: 'Aseo' },
+    { nombre: 'Paños amarillos', cantidad: 'aguantan', categoria: 'Aseo' },
+    { nombre: 'Quix', cantidad: 'poco menos mitad', categoria: 'Aseo' },
+    { nombre: 'Bolsa chicas basura', cantidad: 'varias', categoria: 'Aseo' },
+    { nombre: 'Bolsa grande basura', cantidad: 'varias', categoria: 'Aseo' },
+  ];
+
+  const stmtInventario = db.prepare("INSERT OR IGNORE INTO inventario (nombre, cantidad, categoria) VALUES (?, ?, ?)");
+  for (const item of inventarioInicial) {
+    stmtInventario.run(item.nombre, item.cantidad, item.categoria);
+  }
+  stmtInventario.finalize();
 
   console.log("Datos insertados en las tablas.");
 
