@@ -12,7 +12,6 @@ const express = require('express');
 const cors = require('cors');
 const { Bonjour } = require('bonjour-service');
 
-// --- VARIABLES GLOBALES ---
 let mainWindow;
 let bonjour;
 
@@ -383,7 +382,8 @@ ipcMain.handle('update-inventory', async (event, updates) => {
     });
 });
 
-ipcMain.handle('print-shopping-list', async () => {
+// --- ¡NUEVO! MANEJADOR PARA GENERAR EL PDF DE LA LISTA DE COMPRAS ---
+ipcMain.handle('generate-shopping-list-pdf', async () => {
     const db = openDb(true);
     const itemsToBuy = await new Promise((resolve, reject) => {
         const sql = `SELECT nombre, categoria FROM inventario WHERE comprar = 1 ORDER BY categoria, nombre`;
@@ -419,16 +419,23 @@ ipcMain.handle('print-shopping-list', async () => {
     doc.end();
     await new Promise(resolve => stream.on('finish', resolve));
 
+    // Solo retornamos la ruta del archivo, no imprimimos todavía
+    return { success: true, filePath: tempFilePath };
+});
+
+// --- ¡NUEVO! MANEJADOR PARA CONFIRMAR LA IMPRESIÓN DE LA LISTA ---
+ipcMain.handle('confirm-print-shopping-list', async (event, filePath) => {
     try {
-        await print(tempFilePath, { printer: 'XP-80C' });
+        await print(filePath, { printer: 'XP-80C' });
         return { success: true, message: 'Lista de compras enviada a la impresora.' };
     } catch (error) {
         console.error("Error al imprimir la lista de compras:", error);
         return { success: false, message: `Error de impresión: ${error.message}` };
     } finally {
-        fs.unlinkSync(tempFilePath);
+        fs.unlinkSync(filePath); // Limpia el archivo temporal
     }
 });
+
 
 // --- SERVIDOR API ---
 function startApiServer() {
@@ -512,10 +519,8 @@ app.on('will-quit', () => {
   }
 });
 
-app.on('window-all-closed', async () => {
+app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    // await saveAndSendReport();
-    // await clearOrdersTable();
     app.quit();
   }
 });

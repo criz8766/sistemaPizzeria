@@ -8,6 +8,8 @@ let currentNoteItem = {};
 let editingOrderId = null;
 let payingOrderId = null;
 let orderToDeleteId = null;
+// --- NUEVA VARIABLE GLOBAL ---
+let shoppingListPdfPath = ''; // Para guardar la ruta del PDF de la lista de compras
 
 // --- ELEMENTOS DEL DOM ---
 const pizzaModal = document.getElementById('pizza-modal');
@@ -62,11 +64,19 @@ function showAlert(message) {
 }
 
 // --- LÓGICA DE VISTA PREVIA ---
-function showPrintPreview(filePath) {
-  tempPdfPath = filePath;
-  const pdfPreview = document.getElementById('pdf-preview');
-  pdfPreview.src = `${filePath}?t=${new Date().getTime()}`;
-  previewModal.classList.remove('hidden');
+function showPrintPreview(filePath, isShoppingList = false) {
+    if (isShoppingList) {
+        shoppingListPdfPath = filePath;
+        document.getElementById('preview-confirm-btn').dataset.type = 'shoppingList';
+        document.getElementById('preview-cancel-btn').dataset.type = 'shoppingList';
+    } else {
+        tempPdfPath = filePath;
+        document.getElementById('preview-confirm-btn').dataset.type = 'ticket';
+        document.getElementById('preview-cancel-btn').dataset.type = 'ticket';
+    }
+    const pdfPreview = document.getElementById('pdf-preview');
+    pdfPreview.src = `${filePath}?t=${new Date().getTime()}`;
+    previewModal.classList.remove('hidden');
 }
 
 function resetOrderState() {
@@ -374,7 +384,7 @@ finalizeOrderBtn.addEventListener('click', async () => {
     if (!fullOrder) return;
     try {
         const filePath = await window.api.generateTicket(fullOrder);
-        if (filePath) showPrintPreview(filePath);
+        if (filePath) showPrintPreview(filePath, false); // Es un ticket
         else showAlert("Hubo un error al generar el ticket.");
     } catch (error) { console.error("Error generando ticket:", error); showAlert("Error crítico al generar el ticket. Revise la consola."); }
 });
@@ -394,20 +404,33 @@ updateOrderBtn.addEventListener('click', async () => {
     } catch (error) { console.error("Error al actualizar pedido:", error); showAlert("Error crítico al actualizar el pedido. Revise la consola."); }
 });
 
-document.getElementById('preview-cancel-btn').addEventListener('click', () => { window.api.cancelPrint(tempPdfPath); previewModal.classList.add('hidden'); });
-
-document.getElementById('preview-confirm-btn').addEventListener('click', async () => {
-  const printResult = await window.api.confirmPrint({ filePath: tempPdfPath, orderData: fullOrder });
-  previewModal.classList.add('hidden');
-  if (printResult.success) {
-    resetOrderState();
-    document.querySelector('.tab-button[data-target="catalog-tab-content"]').click();
-    searchInput.value = '';
-    searchInput.dispatchEvent(new Event('input'));
-  } else {
-    showAlert(`Error al imprimir: ${printResult.error}\nRevise la consola para más detalles.`);
-  }
+document.getElementById('preview-cancel-btn').addEventListener('click', (e) => {
+    const type = e.target.dataset.type;
+    const path = type === 'shoppingList' ? shoppingListPdfPath : tempPdfPath;
+    window.api.cancelPrint(path);
+    previewModal.classList.add('hidden');
 });
+
+document.getElementById('preview-confirm-btn').addEventListener('click', async (e) => {
+    const type = e.target.dataset.type;
+    previewModal.classList.add('hidden');
+
+    if (type === 'shoppingList') {
+        const result = await window.api.confirmPrintShoppingList(shoppingListPdfPath);
+        showAlert(result.message);
+    } else {
+        const printResult = await window.api.confirmPrint({ filePath: tempPdfPath, orderData: fullOrder });
+        if (printResult.success) {
+            resetOrderState();
+            document.querySelector('.tab-button[data-target="catalog-tab-content"]').click();
+            searchInput.value = '';
+            searchInput.dispatchEvent(new Event('input'));
+        } else {
+            showAlert(`Error al imprimir: ${printResult.error}\nRevise la consola para más detalles.`);
+        }
+    }
+});
+
 
 reportBtn.addEventListener('click', async () => { const result = await window.api.generateReport(); showAlert(result.message); });
 
@@ -440,7 +463,7 @@ historyListEl.addEventListener('click', async (e) => {
         if (orderToReprint) {
             fullOrder = { id: orderToReprint.id, customer: { name: orderToReprint.cliente_nombre, phone: orderToReprint.cliente_telefono }, total: orderToReprint.total, items: JSON.parse(orderToReprint.items_json), timestamp: orderToReprint.fecha, delivery: { type: orderToReprint.tipo_entrega, time: orderToReprint.hora_entrega }, payment: { status: orderToReprint.estado_pago, method: orderToReprint.forma_pago } };
             const filePath = await window.api.generateTicket(fullOrder);
-            if (filePath) showPrintPreview(filePath);
+            if (filePath) showPrintPreview(filePath, false); // Es un ticket
             else showAlert("Hubo un error al generar el ticket de reimpresión.");
         }
     }
@@ -508,8 +531,12 @@ saveInventoryBtn.addEventListener('click', async () => {
 });
 
 printShoppingListBtn.addEventListener('click', async () => {
-    const result = await window.api.printShoppingList();
-    showAlert(result.message);
+    const result = await window.api.generateShoppingListPdf();
+    if (result.success) {
+        showPrintPreview(result.filePath, true); // Es una lista de compras
+    } else {
+        showAlert(result.message);
+    }
 });
 
 orderSummaryEl.addEventListener('click', (e) => { if (e.target.matches('.remove-item-btn')) { const itemId = parseFloat(e.target.dataset.id); removeFromOrder(itemId); } });
@@ -541,7 +568,7 @@ hnhCheckbox.addEventListener('change', () => { hnhOptions.classList.toggle('hidd
 hnhSelect1.addEventListener('change', updateModalPrice);
 hnhSelect2.addEventListener('change', updateModalPrice);
 document.getElementById('notes-cancel-btn').addEventListener('click', () => { notesModal.classList.add('hidden'); });
-document.getElementById('notes-confirm-btn').addEventListener('click', () => { const notes = document.getElementById('product-notes').value.trim(); const itemData = { orderId: Date.now(), name: currentNoteItem.nombre, price: currentNoteItem.precio, size: null, extras: [], notes: notes }; addToOrder(itemData); notesModal.classList.add('hidden'); });
+document.getElementById('notes-confirm-btn').addEventListener('click', () => { const notes = document.getElementById('product-notes').value.trim(); const itemData = { orderId: Date.now(), name: currentNoteItem.nombre, price: currentNoteItem.precio, size: null, extras: [], notes: '' }; addToOrder(itemData); notesModal.classList.add('hidden'); });
 document.getElementById('history-payment-method').addEventListener('change', (e) => { document.getElementById('history-other-payment-wrapper').classList.toggle('hidden', e.target.value !== 'otra'); });
 document.getElementById('payment-cancel-btn').addEventListener('click', () => { confirmPaymentModal.classList.add('hidden'); payingOrderId = null; });
 document.getElementById('payment-confirm-btn').addEventListener('click', async () => { let paymentMethod = document.getElementById('history-payment-method').value; if (paymentMethod === 'otra') { const otherPayment = document.getElementById('history-other-payment-method').value.trim(); if (!otherPayment) { showAlert('Por favor, especifique la otra forma de pago.'); return; } paymentMethod = otherPayment; } const success = await window.api.updatePaymentStatus({ orderId: payingOrderId, status: 'Pagado', paymentMethod: paymentMethod }); if (success) { loadOrderHistory(); } else { showAlert('Hubo un error al actualizar el estado de pago.'); } confirmPaymentModal.classList.add('hidden'); payingOrderId = null; });
