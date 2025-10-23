@@ -51,6 +51,7 @@ let customPizzaSize = 'mediana';
 const inventoryContainer = document.getElementById('inventory-container');
 const inventoryTabContent = document.getElementById('inventory-tab-content');
 const saveInventoryBtn = document.getElementById('save-inventory-btn');
+const printShoppingListBtn = document.getElementById('print-shopping-list-btn');
 
 
 // --- LÓGICA DE ALERTAS ---
@@ -340,11 +341,19 @@ async function populateInventory() {
             const section = document.createElement('div');
             section.innerHTML = `<h3 class="text-xl font-bold text-gray-800 mb-3">${categoria}</h3>`;
             const grid = document.createElement('div');
-            grid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4';
+            grid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4';
             grouped[categoria].forEach(item => {
                 const itemEl = document.createElement('div');
-                itemEl.className = 'bg-white p-3 rounded-lg shadow-sm flex items-center justify-between';
-                itemEl.innerHTML = `<label class="font-semibold text-sm">${item.nombre}</label><input type="text" class="inventory-input w-28 p-1 border rounded text-right" data-id="${item.id}" value="${item.cantidad}">`;
+                itemEl.className = 'bg-white p-3 rounded-lg shadow-sm flex items-center justify-between gap-2';
+                const checked = item.comprar === 1 ? 'checked' : '';
+                itemEl.innerHTML = `
+                    <label class="font-semibold text-sm flex-grow">${item.nombre}</label>
+                    <input type="text" class="inventory-input w-24 p-1 border rounded text-right" data-id="${item.id}" value="${item.cantidad}">
+                    <label class="flex items-center gap-1 cursor-pointer text-sm text-gray-600">
+                        <input type="checkbox" class="buy-checkbox h-5 w-5" data-id="${item.id}" ${checked}>
+                        Comprar
+                    </label>
+                `;
                 grid.appendChild(itemEl);
             });
             section.appendChild(grid);
@@ -484,7 +493,11 @@ savePricesBtn.addEventListener('click', async () => {
 saveInventoryBtn.addEventListener('click', async () => {
     const updates = [];
     document.querySelectorAll('.inventory-input').forEach(input => {
-        updates.push({ id: parseInt(input.dataset.id), cantidad: input.value });
+        const id = parseInt(input.dataset.id);
+        const cantidad = input.value;
+        const comprarCheckbox = document.querySelector(`.buy-checkbox[data-id="${id}"]`);
+        const comprar = comprarCheckbox.checked ? 1 : 0;
+        updates.push({ id, cantidad, comprar });
     });
     const result = await window.api.updateInventory(updates);
     if (result.success) {
@@ -492,6 +505,11 @@ saveInventoryBtn.addEventListener('click', async () => {
     } else {
         showAlert(`Error al actualizar el inventario: ${result.message}`);
     }
+});
+
+printShoppingListBtn.addEventListener('click', async () => {
+    const result = await window.api.printShoppingList();
+    showAlert(result.message);
 });
 
 orderSummaryEl.addEventListener('click', (e) => { if (e.target.matches('.remove-item-btn')) { const itemId = parseFloat(e.target.dataset.id); removeFromOrder(itemId); } });
@@ -597,10 +615,8 @@ document.addEventListener('DOMContentLoaded', () => {
     showAlert("Error crítico al cargar productos. Revise la consola.");
   });
 
-  // --- ESCUCHA PARA ACTUALIZACIÓN EN TIEMPO REAL ---
   window.api.onInventoryUpdate(() => {
       console.log('Señal de actualización de inventario recibida.');
-      // Revisa si la pestaña de inventario está activa antes de recargar
       if (!inventoryTabContent.classList.contains('hidden')) {
           console.log('Actualizando la vista del inventario...');
           populateInventory();

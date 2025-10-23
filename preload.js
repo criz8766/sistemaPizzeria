@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('api', {
   getInventory: () => ipcRenderer.invoke('get-inventory'),
   updateInventory: (updates) => ipcRenderer.invoke('update-inventory', updates),
   onInventoryUpdate: (callback) => ipcRenderer.on('inventory-updated', callback),
+  printShoppingList: () => ipcRenderer.invoke('print-shopping-list'),
 
   // Funciones de la ventana
   minimizeWindow: () => ipcRenderer.send('minimize-window'),

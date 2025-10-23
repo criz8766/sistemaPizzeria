@@ -12,8 +12,9 @@ const express = require('express');
 const cors = require('cors');
 const { Bonjour } = require('bonjour-service');
 
-// --- VARIABLE GLOBAL PARA LA VENTANA PRINCIPAL ---
+// --- VARIABLES GLOBALES ---
 let mainWindow;
+let bonjour;
 
 // --- CONFIGURACIÓN DE RUTAS ---
 const userDataPath = app.getPath('userData');
@@ -366,8 +367,8 @@ ipcMain.handle('update-inventory', async (event, updates) => {
             try {
                 await new Promise((res, rej) => db.run('BEGIN TRANSACTION', err => err ? rej(err) : res()));
                 for (const item of updates) {
-                    const sql = `UPDATE inventario SET cantidad = ? WHERE id = ?`;
-                    await new Promise((res, rej) => db.run(sql, [item.cantidad, item.id], err => err ? rej(err) : res()));
+                    const sql = `UPDATE inventario SET cantidad = ?, comprar = ? WHERE id = ?`;
+                    await new Promise((res, rej) => db.run(sql, [item.cantidad, item.comprar, item.id], err => err ? rej(err) : res()));
                 }
                 await new Promise((res, rej) => db.run('COMMIT', err => err ? rej(err) : res()));
                 resolve({ success: true });
@@ -382,19 +383,64 @@ ipcMain.handle('update-inventory', async (event, updates) => {
     });
 });
 
+ipcMain.handle('print-shopping-list', async () => {
+    const db = openDb(true);
+    const itemsToBuy = await new Promise((resolve, reject) => {
+        const sql = `SELECT nombre, categoria FROM inventario WHERE comprar = 1 ORDER BY categoria, nombre`;
+        db.all(sql, [], (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows);
+        });
+    });
+    db.close();
 
+    if (itemsToBuy.length === 0) {
+        return { success: false, message: 'No hay productos marcados para comprar.' };
+    }
+
+    const tempFilePath = path.join(os.tmpdir(), `lista-compras-${Date.now()}.pdf`);
+    const doc = new PDFDocument({ size: 'A4', margins: { top: 50, bottom: 50, left: 72, right: 72 } });
+    const stream = fs.createWriteStream(tempFilePath);
+    doc.pipe(stream);
+
+    doc.fontSize(20).text('Lista de Compras - Pizzería Piamonte', { align: 'center' });
+    doc.moveDown(2);
+
+    let currentCategory = '';
+    itemsToBuy.forEach(item => {
+        if (item.categoria !== currentCategory) {
+            doc.moveDown(1);
+            doc.fontSize(16).text(item.categoria, { underline: true });
+            currentCategory = item.categoria;
+        }
+        doc.fontSize(12).text(`- ${item.nombre}`);
+    });
+
+    doc.end();
+    await new Promise(resolve => stream.on('finish', resolve));
+
+    try {
+        await print(tempFilePath, { printer: 'XP-80C' });
+        return { success: true, message: 'Lista de compras enviada a la impresora.' };
+    } catch (error) {
+        console.error("Error al imprimir la lista de compras:", error);
+        return { success: false, message: `Error de impresión: ${error.message}` };
+    } finally {
+        fs.unlinkSync(tempFilePath);
+    }
+});
+
+// --- SERVIDOR API ---
 function startApiServer() {
     const api = express();
     api.use(cors());
     api.use(express.json());
     const port = 3000;
 
-    // --- ¡NUEVO! ENDPOINT DE HEARTBEAT ---
     api.get('/ping', (req, res) => {
         res.status(200).send('pong');
     });
 
-    // Endpoints de la API
     api.get('/api/ingredientes', (req, res) => {
         const db = openDb(true);
         db.all('SELECT * FROM inventario ORDER BY categoria, nombre', [], (err, rows) => {
@@ -411,9 +457,9 @@ function startApiServer() {
             try {
                 await new Promise((res, rej) => db.run('BEGIN TRANSACTION', err => err ? rej(err) : res()));
                 for(const item of updates) {
-                    const { id, cantidad } = item;
-                    const sql = `UPDATE inventario SET cantidad = ? WHERE id = ?`;
-                    await new Promise((res, rej) => db.run(sql, [cantidad, id], err => err ? rej(err) : res()));
+                    const { id, cantidad, comprar } = item;
+                    const sql = `UPDATE inventario SET cantidad = ?, comprar = ? WHERE id = ?`;
+                    await new Promise((res, rej) => db.run(sql, [cantidad, comprar, id], err => err ? rej(err) : res()));
                 }
                 await new Promise((res, rej) => db.run('COMMIT', err => err ? rej(err) : res()));
                 if (mainWindow) {
@@ -432,15 +478,9 @@ function startApiServer() {
 
     api.listen(port, () => {
         console.log(`API de inventario corriendo en http://localhost:${port}`);
-        
         try {
             bonjour = new Bonjour();
-            bonjour.publish({
-                name: 'Piamonte API Server',
-                type: 'http',
-                port: port,
-                txt: { service: 'piamonte-inventario-api' }
-            });
+            bonjour.publish({ name: 'Piamonte API Server', type: 'http', port: port });
             console.log('Servicio de inventario anunciado en la red local.');
         } catch (error) {
             console.error("Error al anunciar el servicio Bonjour:", error);
@@ -452,11 +492,7 @@ function startApiServer() {
 // --- LÓGICA DE LA VENTANA Y CICLO DE VIDA ---
 const createWindow = () => {
   mainWindow = new BrowserWindow({ width: 1280, height: 800, webPreferences: { preload: path.join(__dirname, 'preload.js') }, frame: false, autoHideMenuBar: true });
-  
-  if (app.isPackaged) {
-    Menu.setApplicationMenu(null);
-  }
-
+  if (app.isPackaged) { Menu.setApplicationMenu(null); }
   mainWindow.webContents.session.clearCache().then(() => { mainWindow.loadFile('index.html'); });
 };
 
@@ -472,14 +508,14 @@ app.whenReady().then(() => {
 app.on('will-quit', () => {
   if (bonjour) {
     console.log('Deteniendo el anuncio del servicio en la red.');
-    bonjour.unpublishAll(() => {
-        bonjour.destroy();
-    });
+    bonjour.unpublishAll(() => { bonjour.destroy(); });
   }
 });
 
-app.on('window-all-closed', () => {
+app.on('window-all-closed', async () => {
   if (process.platform !== 'darwin') {
+    // await saveAndSendReport();
+    // await clearOrdersTable();
     app.quit();
   }
 });
