@@ -1,56 +1,52 @@
 {
-  "name": "sistemapizzeriapiamonte",
+  "name": "pizzeria-piamonte",
   "version": "1.0.0",
-  "description": "",
+  "description": "Sistema de gestión para Pizzería Piamonte",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder"
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
   },
-  "keywords": [],
-  "author": "Criz (Arccidev)",
-  "license": "ISC",
-  "type": "commonjs",
-  "devDependencies": {
-    "electron": "^37.2.6",
-    "electron-builder": "^26.0.12"
-  },
+  "keywords": ["electron", "pizzeria", "pos", "punto-de-venta"],
+  "author": "Pizzería Piamonte",
+  "license": "MIT",
   "dependencies": {
-    "bonjour-service": "^1.3.0",
-    "cors": "^2.8.5",
-    "dotenv": "^17.2.1",
-    "express": "^5.1.0",
-    "node-thermal-printer": "^4.5.0",
-    "nodemailer": "^7.0.5",
-    "pdf-to-printer": "^5.6.0",
-    "pdfkit": "^0.17.1",
     "sqlite3": "^5.1.7",
-    "xlsx": "^0.18.5"
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "pdfkit": "^0.15.0",
+    "bonjour-service": "^1.2.1",
+    "xlsx": "^0.18.5",
+    "nodemailer": "^6.9.8",
+    "pdf-to-printer": "^5.6.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
   },
   "build": {
-    "appId": "com.piamonte.sistema",
-    "productName": "Sistema Pizzeria Piamonte",
+    "appId": "com.piamonte.pizzeria",
+    "productName": "Pizzería Piamonte",
+    "directories": {
+      "output": "dist"
+    },
+    "files": ["**/*", "!node_modules/**/*", "node_modules/sqlite3/**/*"],
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.ico"
+      "icon": "icon.ico"
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+    "mac": {
+      "target": "dmg",
+      "icon": "icon.icns"
     },
-    "extraResources": [
-      {
-        "from": "./piamonte.db",
-        "to": "piamonte.db"
-      },
-      {
-        "from": "./.env",
-        "to": ".env"
-      },
-      {
-        "from": "./assets/logo.jpg",
-        "to": "assets/logo.jpg"
-      }
-    ]
+    "linux": {
+      "target": "AppImage",
+      "icon": "icon.png"
+    }
   }
 }
