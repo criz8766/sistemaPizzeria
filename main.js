@@ -1,3 +1,4 @@
+// main.js
 const { app, BrowserWindow, ipcMain, dialog, Menu } = require("electron");
 const path = require("path");
 const sqlite3 = require("sqlite3").verbose();
@@ -110,7 +111,7 @@ ipcMain.handle("generate-ticket", async (event, orderData) => {
     const logoSize = 60;
     const xPosition = (ticketWidth - logoSize) / 2; // Centrar
     doc.image(logoPath, xPosition, doc.y, { width: logoSize, height: logoSize });
-    doc.moveDown(4);
+    doc.moveDown(4); // Ajustar espacio después del logo si es necesario
   }
 
   // Encabezado
@@ -190,7 +191,8 @@ ipcMain.handle("generate-ticket", async (event, orderData) => {
         });
 
     // Ajustar la posición Y *después* de dibujar nombre y precio
-    doc.y = yPosition + nameHeight; // Moverse debajo del texto del nombre
+    // Asegurarse de que haya al menos un pequeño espacio, incluso si nameHeight es pequeño
+    doc.y = yPosition + Math.max(nameHeight, 10); // Moverse debajo del texto del nombre, mínimo 10 puntos
 
     // Agregados y Notas (si existen)
     if (item.extras && item.extras.length > 0) {
@@ -235,7 +237,7 @@ ipcMain.handle("generate-ticket", async (event, orderData) => {
 
   doc.font("Helvetica-Bold").fontSize(10);
   doc.text(`SUBTOTAL: $${totalProductos.toLocaleString("es-CL")}`, {
-    align: "right",
+    align: "right", // Cambiado a right para consistencia
   });
   doc.moveDown(0.5);
 
@@ -270,13 +272,11 @@ ipcMain.handle("confirm-print", async (event, { filePath, orderData }) => {
   const runDb = (sql, params) =>
     new Promise((resolve, reject) => {
       db.run(sql, params, function (err) {
-        // Usar function para 'this' si se necesita el lastID
         if (err) reject(err);
-        else resolve(this);
+        else resolve(this); // 'this' contiene lastID para INSERT
       });
     });
 
-  // Guardar o actualizar en la base de datos
   try {
     if (orderData.id) {
       // Actualizar pedido existente
@@ -297,7 +297,7 @@ ipcMain.handle("confirm-print", async (event, { filePath, orderData }) => {
     } else {
       // Insertar nuevo pedido
       const sql = `INSERT INTO pedidos (cliente_nombre, cliente_telefono, total, items_json, fecha, tipo_entrega, hora_entrega, forma_pago, estado_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-      await runDb(sql, [
+      const result = await runDb(sql, [
         orderData.customer.name,
         orderData.customer.phone,
         orderData.total,
@@ -308,11 +308,10 @@ ipcMain.handle("confirm-print", async (event, { filePath, orderData }) => {
         orderData.payment.method,
         orderData.payment.status,
       ]);
-      console.log("Nuevo pedido guardado en DB.");
+      console.log(`Nuevo pedido guardado en DB con ID: ${result.lastID}.`);
     }
   } catch (dbErr) {
     console.error("Error al guardar/actualizar el pedido:", dbErr);
-    // Considerar si devolver un error aquí o solo loggear
   } finally {
     db.close((err) => {
       if (err)
@@ -322,15 +321,13 @@ ipcMain.handle("confirm-print", async (event, { filePath, orderData }) => {
 
   // Intentar imprimir
   try {
-    // Asegúrate de que el nombre de la impresora sea exacto
-    await print(filePath, { printer: "XP-80C", timeout: 5000 }); // Ajusta el nombre si es necesario
+    await print(filePath, { printer: "XP-80C", timeout: 5000 });
     console.log(`Ticket ${filePath} enviado a la impresora XP-80C.`);
     return { success: true };
   } catch (error) {
     console.error("Error de impresión:", error);
     return { success: false, error: error.message };
   } finally {
-    // Borrar el archivo temporal después de intentar imprimir
     try {
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
@@ -385,35 +382,125 @@ ipcMain.handle("update-order", async (event, orderData) => {
   });
 });
 
-// Eliminar un pedido (Versión Simplificada)
-ipcMain.handle("delete-order", async (event, orderId) => {
-  const db = openDb();
-  const sql = "DELETE FROM pedidos WHERE id = ?";
+// --- INICIO CÓDIGO delete-order DE LA VERSIÓN ANTERIOR ---
+ipcMain.handle('delete-order', async (event, orderId) => {
+    const db = openDb();
+    const today = getLocalDate(); // Obtiene la fecha actual YYYY-MM-DD
+    return new Promise((resolve) => {
+        db.serialize(async () => { // Asegura ejecución secuencial
+            try {
+                // Inicia transacción para asegurar atomicidad
+                await new Promise((res, rej) => db.run('BEGIN TRANSACTION', err => err ? rej(err) : res()));
+                console.log(`[Delete Tx] Iniciada para eliminar pedido ${orderId}`);
 
-  return new Promise((resolve) => {
-    db.run(sql, [orderId], function (err) { // Usa 'function' para acceder a 'this.changes'
-      db.close((closeErr) => {
-        if (closeErr) {
-          console.error("Error al cerrar la DB después de borrar:", closeErr.message);
-        }
-      });
+                // 1. Elimina el pedido específico
+                const deleteResult = await new Promise((res, rej) => {
+                    db.run('DELETE FROM pedidos WHERE id = ?', [orderId], function(err) {
+                        if (err) {
+                            console.error(`[Delete Tx] Error eliminando pedido ${orderId}: ${err.message}`);
+                            return rej(err);
+                        }
+                        if (this.changes === 0) {
+                            console.warn(`[Delete Tx] Pedido ${orderId} no encontrado para eliminar.`);
+                            // Podríamos decidir si continuar o abortar aquí. Por ahora, continuamos.
+                        } else {
+                            console.log(`[Delete Tx] Pedido ${orderId} eliminado.`);
+                        }
+                        res(this.changes);
+                    });
+                });
 
-      if (err) {
-        console.error("Error al eliminar pedido:", err.message);
-        resolve(false); // Indica que la operación falló
-      } else {
-        // Verifica si se eliminó alguna fila
-        if (this.changes > 0) {
-          console.log(`Pedido #${orderId} eliminado correctamente.`);
-          resolve(true); // Indica que la operación fue exitosa
-        } else {
-          console.log(`No se encontró el Pedido #${orderId} para eliminar.`);
-          resolve(false); // Indica que no se encontró el pedido
-        }
-      }
+                // 2. Obtiene todos los pedidos restantes DEL DÍA DE HOY (ordenados por ID original)
+                const remainingOrders = await new Promise((res, rej) => {
+                    // Selecciona solo los pedidos del día actual
+                    const sql = `SELECT * FROM pedidos WHERE date(fecha, 'localtime') = ? ORDER BY id ASC`;
+                    db.all(sql, [today], (err, rows) => {
+                        if (err) {
+                            console.error(`[Delete Tx] Error obteniendo pedidos restantes del día ${today}: ${err.message}`);
+                            return rej(err);
+                        }
+                        console.log(`[Delete Tx] ${rows.length} pedidos restantes encontrados para hoy.`);
+                        res(rows);
+                    });
+                });
+
+                // 3. ¡Elimina TODOS los pedidos DEL DÍA DE HOY! (para luego reinsertarlos renumerados)
+                await new Promise((res, rej) => {
+                    db.run(`DELETE FROM pedidos WHERE date(fecha, 'localtime') = ?`, [today], function(err) {
+                        if (err) {
+                            console.error(`[Delete Tx] Error eliminando TODOS los pedidos del día ${today}: ${err.message}`);
+                            return rej(err);
+                        }
+                        console.log(`[Delete Tx] ${this.changes} pedidos eliminados para hoy (preparando re-inserción).`);
+                        res();
+                    });
+                });
+
+                // 4. Resetea el contador de autoincremento para la tabla 'pedidos'.
+                //    Esto hará que el próximo INSERT empiece desde 1 (o el siguiente ID disponible si hubiera pedidos de otros días).
+                //    Si solo queremos renumerar los de hoy desde 1, esto podría no ser lo ideal si hay pedidos de otros días.
+                //    NOTA: Si SQLite no encuentra la fila, no da error.
+                await new Promise((res, rej) => {
+                    db.run(`DELETE FROM sqlite_sequence WHERE name='pedidos'`, err => {
+                        if (err) {
+                           console.warn(`[Delete Tx] Advertencia: No se pudo eliminar la secuencia de 'pedidos'. Puede que no existiera aún: ${err.message}`);
+                           // No rechazamos la promesa aquí, ya que puede ser normal si la tabla está vacía.
+                        } else {
+                           console.log(`[Delete Tx] Secuencia de autoincremento para 'pedidos' reseteada.`);
+                        }
+                        res();
+                    });
+                });
+
+                // 5. Reinserta los pedidos restantes DEL DÍA DE HOY (esto los renumerará secuencialmente)
+                console.log(`[Delete Tx] Reinsertando ${remainingOrders.length} pedidos para hoy...`);
+                for (const order of remainingOrders) {
+                    const sql = `INSERT INTO pedidos (cliente_nombre, cliente_telefono, total, items_json, fecha, estado, tipo_entrega, hora_entrega, forma_pago, estado_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                    const params = [order.cliente_nombre, order.cliente_telefono, order.total, order.items_json, order.fecha, order.estado, order.tipo_entrega, order.hora_entrega, order.forma_pago, order.estado_pago];
+                    // El ID será asignado automáticamente por SQLite, empezando desde 1 (o el siguiente disponible globalmente)
+                    await new Promise((res, rej) => {
+                        db.run(sql, params, function(err) { // Usar function para obtener lastID
+                            if (err) {
+                                console.error(`[Delete Tx] Error reinsertando pedido (ID original ${order.id}): ${err.message}`);
+                                return rej(err);
+                            }
+                            console.log(`[Delete Tx] Pedido (ID original ${order.id}) reinsertado con nuevo ID ${this.lastID}.`);
+                            res();
+                        });
+                    });
+                }
+                console.log(`[Delete Tx] Re-inserción completada.`);
+
+                // 6. Confirma la transacción completa
+                await new Promise((res, rej) => db.run('COMMIT', err => {
+                    if (err) {
+                        console.error(`[Delete Tx] Error al hacer COMMIT: ${err.message}`);
+                        return rej(err);
+                    }
+                    console.log(`[Delete Tx] COMMIT exitoso.`);
+                    res();
+                }));
+
+                resolve(true); // Indica que la operación fue exitosa
+
+            } catch (error) {
+                console.error("[Delete Tx] Error en la transacción, revirtiendo cambios:", error);
+                // Intenta revertir la transacción en caso de cualquier error
+                await new Promise((res) => db.run('ROLLBACK', err => {
+                     if(err) console.error(`[Delete Tx] Error durante ROLLBACK: ${err.message}`);
+                     res(); // Resuelve incluso si el rollback falla, para poder cerrar la DB.
+                }));
+                resolve(false); // Indica que la operación falló
+            } finally {
+                // Cierra la conexión a la base de datos en cualquier caso
+                db.close((err) => {
+                    if (err) console.error(`[Delete Tx] Error al cerrar la DB: ${err.message}`);
+                });
+            }
+        });
     });
-  });
 });
+// --- FIN CÓDIGO delete-order DE LA VERSIÓN ANTERIOR ---
 
 
 // Cancelar impresión (borrar archivo temporal)
@@ -554,9 +641,7 @@ async function saveAndSendReport() {
     }
   } catch (mkdirError) {
       console.error("No se pudo crear la carpeta de reportes:", mkdirError);
-      // Decidir si continuar sin guardado local o mostrar error
       dialog.showErrorBox("Error Guardado Local", `No se pudo crear la carpeta 'reportes' en el Escritorio.`);
-      // Podríamos intentar enviar solo por correo si la generación funciona
   }
 
 
@@ -569,37 +654,43 @@ async function saveAndSendReport() {
   const localReportResult = await generateDailyReport(localReportPath);
 
   if (!localReportResult.success && localReportResult.message === "No hay pedidos guardados para el día de hoy.") {
-      dialog.showMessageBoxSync(mainWindow, { // Asegurarse de pasar mainWindow si está disponible
-        type: "info",
-        title: "Sin Reporte",
-        message: "No se encontraron ventas el día de hoy. No se generó ningún reporte.",
-      });
+      if (mainWindow && !mainWindow.isDestroyed()) { // Solo mostrar si la ventana existe
+        dialog.showMessageBoxSync(mainWindow, {
+            type: "info",
+            title: "Sin Reporte",
+            message: "No se encontraron ventas el día de hoy. No se generó ningún reporte.",
+        });
+      }
       console.log("No hay reporte para guardar o enviar.");
       return; // Salir si no hay pedidos
   } else if (!localReportResult.success) {
       // Hubo otro error al generar/guardar localmente
-      dialog.showErrorBox("Error Guardado Local", `No se pudo generar o guardar el reporte localmente:\n${localReportResult.message}`);
-      // Decidir si intentar enviar por correo de todas formas (si filePath existe) o no
-      // Por ahora, no continuamos si falla el guardado local.
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        dialog.showErrorBox("Error Guardado Local", `No se pudo generar o guardar el reporte localmente:\n${localReportResult.message}`);
+      }
       return;
   }
 
-  // Si se guardó localmente, informar al usuario
-  dialog.showMessageBoxSync(mainWindow, { // Asegurarse de pasar mainWindow
-    type: "info",
-    title: "Respaldo Local Creado",
-    message: `El reporte de ventas se ha guardado en:\n${localReportPath}`,
-  });
+  // Si se guardó localmente, informar al usuario (solo si la ventana existe)
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    dialog.showMessageBoxSync(mainWindow, {
+        type: "info",
+        title: "Respaldo Local Creado",
+        message: `El reporte de ventas se ha guardado en:\n${localReportPath}`,
+    });
+  }
 
 
   // Intentar enviar por correo con Gmail
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !process.env.EMAIL_TO || !process.env.EMAIL_FROM) {
     console.log("Faltan credenciales de Gmail en .env. Omitiendo envío de correo.");
-    dialog.showMessageBoxSync(mainWindow, { // Asegurarse de pasar mainWindow
-      type: "warning",
-      title: "Envío Omitido",
-      message: "No se configuraron todas las credenciales de correo en .env para enviar el reporte automáticamente.",
-    });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        dialog.showMessageBoxSync(mainWindow, {
+            type: "warning",
+            title: "Envío Omitido",
+            message: "No se configuraron todas las credenciales de correo en .env para enviar el reporte automáticamente.",
+        });
+    }
     return; // Salir si falta configuración
   }
 
@@ -627,49 +718,51 @@ async function saveAndSendReport() {
       ],
     });
     console.log("Correo de reporte enviado exitosamente.");
-    dialog.showMessageBoxSync(mainWindow, { // Asegurarse de pasar mainWindow
-      type: "info",
-      title: "Reporte Enviado",
-      message: "El reporte de ventas también fue enviado exitosamente al correo configurado.",
-    });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        dialog.showMessageBoxSync(mainWindow, {
+            type: "info",
+            title: "Reporte Enviado",
+            message: "El reporte de ventas también fue enviado exitosamente al correo configurado.",
+        });
+    }
   } catch (error) {
     console.error("Error al enviar el correo:", error);
-    dialog.showErrorBox( // Usar showErrorBox para errores
-      "Error al Enviar Reporte",
-      `No se pudo enviar el reporte por correo:\n${error.message}`
-    );
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        dialog.showErrorBox(
+            "Error al Enviar Reporte",
+            `No se pudo enviar el reporte por correo:\n${error.message}`
+        );
+    }
   }
 }
 
 // Limpiar tabla de pedidos (¡Usar con precaución!)
-// No se llama automáticamente, podría añadirse a un botón en Configuración si es necesario.
-// async function clearOrdersTable() {
-//   console.log("Limpiando y reseteando la tabla de pedidos...");
-//   const db = openDb();
-//   const run = (sql) =>
-//     new Promise((resolve, reject) => {
-//       db.run(sql, [], function (err) {
-//         if (err) return reject(err);
-//         resolve(this);
-//       });
-//     });
-//   try {
-//     await run(`DELETE FROM pedidos`);
-//     await run(`DELETE FROM sqlite_sequence WHERE name='pedidos'`); // Resetea el autoincremento
-//     console.log("Tabla de pedidos limpiada y contador reseteado.");
-//   } catch (err) {
-//     console.error("Error durante la limpieza de la tabla:", err.message);
-//   } finally {
-//     db.close((err) => {
-//       if (err) console.error("Error al cerrar la DB después de limpiar:", err.message);
-//     });
-//   }
-// }
+// Esta función ahora solo limpia la tabla, la renumeración se hace en delete-order
+async function clearOrdersTable() {
+    console.log('Limpiando y reseteando la tabla de pedidos...');
+    const db = openDb();
+    const run = (sql) => new Promise((resolve, reject) => {
+        db.run(sql, [], function(err) { if (err) return reject(err); resolve(this); });
+    });
+    try {
+        await run(`DELETE FROM pedidos`);
+        await run(`DELETE FROM sqlite_sequence WHERE name='pedidos'`); // Resetea el autoincremento
+        console.log("Tabla de pedidos limpiada y contador reseteado.");
+    } catch (err) {
+        console.error('Error durante la limpieza de la tabla:', err.message);
+    } finally {
+        db.close((err) => {
+            if (err) console.error('Error al cerrar la DB después de limpiar:', err.message);
+        });
+    }
+}
+
 
 // Obtener pedidos del día
 ipcMain.handle("get-todays-orders", async () => {
   const db = openDb(true);
   const today = getLocalDate();
+  // Ordenar por ID ASCENDENTE para mostrarlos en orden cronológico en la interfaz
   const sql = `SELECT * FROM pedidos WHERE date(fecha, 'localtime') = ? ORDER BY id DESC`;
   try {
     const orders = await new Promise((resolve, reject) => {
@@ -732,28 +825,21 @@ ipcMain.handle("update-prices", async (event, updates) => {
         await new Promise((res, rej) => db.run("BEGIN TRANSACTION", (err) => (err ? rej(err) : res())));
 
         for (const table in updates) {
-          if (!updates[table] || updates[table].length === 0) continue; // Saltar si no hay updates para esta tabla
+          if (!updates[table] || updates[table].length === 0) continue;
 
           for (const item of updates[table]) {
             const fields = Object.keys(item).filter((k) => k !== "id");
-            if (fields.length === 0) continue; // Saltar si solo viene el ID
+            if (fields.length === 0) continue;
 
             const setClause = fields.map((f) => `${f} = ?`).join(", ");
             const params = fields.map((f) => item[f]);
-            params.push(item.id); // Añadir ID al final para el WHERE
+            params.push(item.id);
 
             const sql = `UPDATE ${table} SET ${setClause} WHERE id = ?`;
 
-            await new Promise((res, rej) => db.run(sql, params, function(err) { // Usar function para this.changes
-                if (err) {
-                    console.error(`Error actualizando ${table} ID ${item.id}:`, err);
-                    rej(err); // Rechazar la promesa si hay error en esta query
-                } else {
-                    if (this.changes === 0) {
-                        console.warn(`No se encontró ${table} con ID ${item.id} para actualizar.`);
-                    }
-                    res();
-                }
+            await new Promise((res, rej) => db.run(sql, params, function(err) {
+                if (err) { console.error(`Error actualizando ${table} ID ${item.id}:`, err); rej(err); }
+                else { if (this.changes === 0) console.warn(`No se encontró ${table} con ID ${item.id} para actualizar.`); res(); }
             }));
           }
         }
@@ -763,16 +849,10 @@ ipcMain.handle("update-prices", async (event, updates) => {
         resolve({ success: true });
       } catch (error) {
         console.error("Error en la transacción de actualización de precios, revirtiendo:", error);
-        await new Promise((res, rej) => db.run("ROLLBACK", (err) => {
-            // Incluso si el rollback falla, debemos informar del error original
-            if (err) console.error("Error durante ROLLBACK:", err);
-            res(); // Resolvemos para que el flujo continúe al finally
-        }));
+        await new Promise((res) => db.run("ROLLBACK", (err) => { if (err) console.error("Error durante ROLLBACK:", err); res(); }));
         resolve({ success: false, message: error.message });
       } finally {
-        db.close((err) => {
-            if (err) console.error("Error al cerrar DB en update-prices:", err.message);
-        });
+        db.close((err) => { if (err) console.error("Error al cerrar DB en update-prices:", err.message); });
       }
     });
   });
@@ -787,10 +867,7 @@ ipcMain.handle("get-inventory", async () => {
   return new Promise((resolve, reject) => {
     db.all("SELECT * FROM inventario ORDER BY categoria, nombre", [], (err, rows) => {
       db.close((closeErr) => { if(closeErr) console.error("Error al cerrar DB en get-inventory:", closeErr.message); });
-      if (err) {
-          console.error("Error al obtener inventario:", err);
-          reject(err);
-      }
+      if (err) { console.error("Error al obtener inventario:", err); reject(err); }
       else resolve(rows);
     });
   });
@@ -814,10 +891,7 @@ ipcMain.handle("update-inventory", async (event, updates) => {
         resolve({ success: true });
       } catch (error) {
         console.error("Error en transacción de actualización de inventario:", error);
-        await new Promise((res, rej) => db.run("ROLLBACK", (err) => {
-            if(err) console.error("Error durante ROLLBACK de inventario:", err);
-            res();
-        }));
+        await new Promise((res) => db.run("ROLLBACK", (err) => { if(err) console.error("Error durante ROLLBACK de inventario:", err); res(); }));
         resolve({ success: false, message: error.message });
       } finally {
         db.close((err) => { if (err) console.error("Error al cerrar DB en update-inventory:", err.message); });
@@ -850,10 +924,7 @@ ipcMain.handle("generate-shopping-list-pdf", async () => {
   }
 
   const tempFilePath = path.join(os.tmpdir(), `lista-compras-${Date.now()}.pdf`);
-  const doc = new PDFDocument({
-    size: "A4",
-    margins: { top: 50, bottom: 50, left: 72, right: 72 },
-  });
+  const doc = new PDFDocument({ size: "A4", margins: { top: 50, bottom: 50, left: 72, right: 72 } });
   const stream = fs.createWriteStream(tempFilePath);
   doc.pipe(stream);
 
@@ -874,10 +945,7 @@ ipcMain.handle("generate-shopping-list-pdf", async () => {
   doc.end();
 
   try {
-      await new Promise((resolve, reject) => {
-        stream.on("finish", resolve);
-        stream.on("error", reject);
-      });
+      await new Promise((resolve, reject) => { stream.on("finish", resolve); stream.on("error", reject); });
       console.log(`Lista de compras PDF generada en: ${tempFilePath}`);
       return { success: true, filePath: tempFilePath };
   } catch (writeError) {
@@ -889,7 +957,6 @@ ipcMain.handle("generate-shopping-list-pdf", async () => {
 // Confirmar impresión de lista de compras
 ipcMain.handle("confirm-print-shopping-list", async (event, filePath) => {
   try {
-    // Asegúrate de que el nombre de la impresora sea correcto
     await print(filePath, { printer: "XP-80C", timeout: 5000 });
     console.log(`Lista de compras ${filePath} enviada a la impresora XP-80C.`);
     return { success: true, message: "Lista de compras enviada a la impresora." };
@@ -897,128 +964,75 @@ ipcMain.handle("confirm-print-shopping-list", async (event, filePath) => {
     console.error("Error al imprimir la lista de compras:", error);
     return { success: false, message: `Error de impresión: ${error.message}` };
   } finally {
-     try {
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-            console.log(`Archivo temporal ${filePath} eliminado.`);
-        }
-    } catch (unlinkErr) {
-        console.error(`No se pudo borrar el archivo temporal ${filePath}:`, unlinkErr);
-    }
+     try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); }
+     catch (unlinkErr) { console.error(`No se pudo borrar el archivo temporal ${filePath}:`, unlinkErr); }
   }
 });
 
 // --- API SERVER para Inventario Remoto ---
 function startApiServer() {
   const api = express();
-  api.use(cors()); // Permitir peticiones desde cualquier origen (ajustar si es necesario)
-  api.use(express.json()); // Para parsear body JSON
+  api.use(cors());
+  api.use(express.json());
   const port = 3000;
 
-  // Endpoint de prueba
-  api.get("/ping", (req, res) => {
-    res.status(200).send("pong");
-  });
+  api.get("/ping", (req, res) => res.status(200).send("pong"));
 
-  // Obtener todos los ingredientes/inventario
   api.get("/api/ingredientes", (req, res) => {
-    const db = openDb(true); // Abrir en modo solo lectura
+    const db = openDb(true);
     db.all("SELECT * FROM inventario ORDER BY categoria, nombre", [], (err, rows) => {
-      db.close(); // Cerrar conexión
-      if (err) {
-          console.error("API Error en /api/ingredientes:", err.message);
-          return res.status(500).json({ error: err.message });
-      }
+      db.close();
+      if (err) { console.error("API Error en /api/ingredientes:", err.message); return res.status(500).json({ error: err.message }); }
       res.json(rows);
     });
   });
 
-  // Actualizar uno o más ingredientes
   api.post("/api/ingredientes/update", (req, res) => {
-    // Asegurarse de que updates sea siempre un array
     const updates = Array.isArray(req.body) ? req.body : [req.body];
-    if (updates.length === 0) {
-        return res.status(400).json({ success: false, message: "No hay datos para actualizar." });
-    }
+    if (updates.length === 0) return res.status(400).json({ success: false, message: "No hay datos para actualizar." });
 
-    const db = openDb(); // Abrir para escritura
-    db.serialize(async () => { // Usar serialize para asegurar el orden de las operaciones
+    const db = openDb();
+    db.serialize(async () => {
       try {
         await new Promise((res, rej) => db.run("BEGIN TRANSACTION", (err) => (err ? rej(err) : res())));
-
         for (const item of updates) {
-          // Validar datos básicos
           if (typeof item.id === 'undefined' || (typeof item.cantidad === 'undefined' && typeof item.comprar === 'undefined')) {
-             console.warn("API /update: Item inválido recibido - ", item);
-             continue; // Saltar este item si le faltan datos cruciales
+             console.warn("API /update: Item inválido recibido - ", item); continue;
           }
-
-          const fieldsToUpdate = [];
-          const params = [];
-          if (typeof item.cantidad !== 'undefined') {
-              fieldsToUpdate.push("cantidad = ?");
-              params.push(item.cantidad);
-          }
-          if (typeof item.comprar !== 'undefined') {
-              fieldsToUpdate.push("comprar = ?");
-              // Asegurarse de que 'comprar' sea 0 o 1
-              params.push(item.comprar ? 1 : 0);
-          }
-
+          const fieldsToUpdate = [], params = [];
+          if (typeof item.cantidad !== 'undefined') { fieldsToUpdate.push("cantidad = ?"); params.push(item.cantidad); }
+          if (typeof item.comprar !== 'undefined') { fieldsToUpdate.push("comprar = ?"); params.push(item.comprar ? 1 : 0); }
           if (fieldsToUpdate.length > 0) {
-              params.push(item.id); // Añadir ID para el WHERE
+              params.push(item.id);
               const sql = `UPDATE inventario SET ${fieldsToUpdate.join(", ")} WHERE id = ?`;
               await new Promise((resolveUpdate, rejectUpdate) =>
-                  db.run(sql, params, function(err) { // Usar function para this.changes
-                      if (err) {
-                          console.error(`API Error actualizando ID ${item.id}:`, err);
-                          rejectUpdate(err); // Rechazar si falla esta actualización
-                      } else {
-                          if (this.changes === 0) {
-                            console.warn(`API /update: No se encontró ID ${item.id} para actualizar.`);
-                          }
-                          resolveUpdate();
-                      }
+                  db.run(sql, params, function(err) {
+                      if (err) { console.error(`API Error actualizando ID ${item.id}:`, err); rejectUpdate(err); }
+                      else { if (this.changes === 0) console.warn(`API /update: No se encontró ID ${item.id} para actualizar.`); resolveUpdate(); }
                   })
               );
           }
-        } // Fin del bucle for
-
-        await new Promise((res, rej) => db.run("COMMIT", (err) => (err ? rej(err) : res())));
-
-        // Enviar señal a la ventana principal para refrescar si está abierta
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("inventory-updated");
-          console.log("API /update: Señal 'inventory-updated' enviada al renderer.");
         }
-
+        await new Promise((res, rej) => db.run("COMMIT", (err) => (err ? rej(err) : res())));
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("inventory-updated");
         res.json({ success: true, message: "Inventario actualizado." });
-
       } catch (error) {
         console.error("Error en API /api/ingredientes/update (Transacción):", error);
-        await new Promise((res, rej) => db.run("ROLLBACK", (err) => {
-            if (err) console.error("Error durante ROLLBACK en API /update:", err);
-            res();
-        }));
+        await new Promise((res) => db.run("ROLLBACK", (err) => { if (err) console.error("Error durante ROLLBACK en API /update:", err); res(); }));
         res.status(500).json({ success: false, message: error.message || "Error interno del servidor" });
       } finally {
         db.close((err) => { if (err) console.error("Error al cerrar DB en API /update:", err.message); });
       }
-    }); // Fin db.serialize
-  }); // Fin api.post
+    });
+  });
 
-  // Iniciar servidor API
   api.listen(port, () => {
     console.log(`API de inventario corriendo en http://localhost:${port}`);
-    // Anunciar servicio en la red local con Bonjour
     try {
       bonjour = new Bonjour();
       bonjour.publish({ name: "Piamonte API Server", type: "http", port: port });
       console.log("Servicio de inventario anunciado en la red local.");
-    } catch (error) {
-      console.error("Error al anunciar el servicio Bonjour:", error);
-      bonjour = null; // Asegurarse de que no intentemos destruirlo si falló la creación
-    }
+    } catch (error) { console.error("Error al anunciar el servicio Bonjour:", error); bonjour = null; }
   });
 }
 
@@ -1029,145 +1043,104 @@ const createWindow = () => {
     height: 800,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true, // Recomendado por seguridad
-      nodeIntegration: false, // Recomendado por seguridad
+      contextIsolation: true,
+      nodeIntegration: false,
     },
-    frame: false, // Quitar marco estándar
-    autoHideMenuBar: true, // Ocultar menú estándar
+    frame: false,
+    autoHideMenuBar: true,
   });
 
-  // Ocultar menú en producción
-  if (app.isPackaged) {
-    Menu.setApplicationMenu(null);
-  }
+  if (app.isPackaged) Menu.setApplicationMenu(null);
 
-  // Limpiar caché y cargar HTML
-  mainWindow.webContents.session.clearCache().then(() => {
-    mainWindow.loadFile("index.html");
-  });
+  mainWindow.webContents.session.clearCache().then(() => mainWindow.loadFile("index.html"));
 
-  // *** NUEVO: Manejar evento 'close' para generar reporte ***
   mainWindow.on('close', async (event) => {
-    console.log("Ventana principal intentando cerrar. Iniciando proceso de reporte...");
-    event.preventDefault(); // ¡Importante! Previene el cierre inmediato
-
+    console.log("Ventana principal intentando cerrar...");
+    event.preventDefault();
     try {
-        // Mostrar un mensaje de espera no bloqueante si es posible
-        // O simplemente loggear que el proceso inició
-        console.log("Generando y enviando reporte final...");
+        console.log("Generando y enviando reporte final (si aplica)...");
+        if (mainWindow && !mainWindow.isDestroyed()) {
+             dialog.showMessageBox(mainWindow, { type: 'info', title: 'Cerrando', message: 'Generando reporte final...', buttons: [] });
+        }
+        await saveAndSendReport(); // Guarda local y envía email
 
-        // Usar showMessageBox para informar al usuario ANTES de iniciar el proceso
-         dialog.showMessageBox(mainWindow, { // Pasar mainWindow
-            type: 'info',
-            title: 'Cerrando Aplicación',
-            message: 'Generando y enviando reporte final. Por favor, espera...',
-            buttons: [] // Sin botones
-        });
+        // --> Llamada a clearOrdersTable movida al evento 'will-quit'
+        // await clearOrdersTable();
 
-
-        await saveAndSendReport(); // Llama a la función y espera
-        console.log("Proceso de reporte finalizado (o saltado si no aplica).");
-
-        // Ahora sí, fuerza el cierre (ya que prevenimos el default)
-        // Usar destroy() en lugar de app.quit() aquí para cerrar solo esta ventana
-        // y permitir que el proceso de cierre natural de Electron continúe.
-        // app.quit() podría ser demasiado abrupto aquí.
-        // Considera mainWindow = null; app.quit(); si es la única ventana.
-         if (mainWindow && !mainWindow.isDestroyed()) {
-             mainWindow.destroy(); // Cierra esta ventana específica
-         }
-         // Si esta es la única ventana, app.quit() se llamará automáticamente por 'window-all-closed'
-
+        console.log("Proceso de cierre (reporte/limpieza) finalizado.");
+         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
     } catch (error) {
-        console.error("Error durante saveAndSendReport en el evento 'close':", error);
-        // Muestra un error antes de cerrar
-        dialog.showErrorBox("Error en Reporte Final", `No se pudo guardar o enviar el reporte:\n${error.message}\n\nLa aplicación se cerrará de todas formas.`);
-
-        // Igualmente cierra la ventana aunque haya error
-         if (mainWindow && !mainWindow.isDestroyed()) {
-             mainWindow.destroy();
-         }
+        console.error("Error durante el proceso de cierre:", error);
+        if (mainWindow && !mainWindow.isDestroyed()) dialog.showErrorBox("Error al Cerrar", `Ocurrió un error:\n${error.message}`);
+         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy(); // Cierra igual
     } finally {
-        // Asegurarse de limpiar la referencia
         mainWindow = null;
     }
-  }); // Fin mainWindow.on('close')
-
-
-  // Opcional: Abrir DevTools si no está empaquetado y se pasa --dev
-  // if (process.argv.includes('--dev')) {
-  //   mainWindow.webContents.openDevTools();
-  // }
-
-  // Limpiar referencia al cerrar
-  mainWindow.on('closed', () => {
-    mainWindow = null;
   });
 
-}; // Fin createWindow
+  mainWindow.on('closed', () => mainWindow = null );
+};
 
 // --- MANEJADORES DE BOTONES DE BARRA DE TÍTULO ---
-ipcMain.on("minimize-window", () => {
-  const w = BrowserWindow.getFocusedWindow();
-  if (w) w.minimize();
-});
-ipcMain.on("maximize-window", () => {
-  const w = BrowserWindow.getFocusedWindow();
-  if (w) {
-    if (w.isMaximized()) w.unmaximize();
-    else w.maximize();
-  }
-});
-ipcMain.on("close-window", () => {
-  const w = BrowserWindow.getFocusedWindow();
-  // Esta llamada activará el manejador mainWindow.on('close', ...) que configuramos
-  if (w) w.close();
-});
+ipcMain.on("minimize-window", () => { const w = BrowserWindow.getFocusedWindow(); if (w) w.minimize(); });
+ipcMain.on("maximize-window", () => { const w = BrowserWindow.getFocusedWindow(); if (w) { if (w.isMaximized()) w.unmaximize(); else w.maximize(); } });
+ipcMain.on("close-window", () => { const w = BrowserWindow.getFocusedWindow(); if (w) w.close(); }); // Esto disparará el evento 'close' de la ventana
 
 // --- EVENTOS DEL CICLO DE VIDA DE LA APP ---
 app.whenReady().then(() => {
   createWindow();
-  startApiServer(); // Iniciar API después de que la app esté lista
-
-  app.on("activate", () => {
-    // En macOS, re-crear ventana si se hace clic en el icono del dock y no hay ventanas
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+  startApiServer();
+  app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
-// Evento ANTES de que la aplicación empiece a cerrarse (útil para limpieza)
-app.on("will-quit", () => {
-  // Manejo de Bonjour (Detener anuncio)
-  if (bonjour) {
-    console.log("Deteniendo el anuncio del servicio Bonjour en la red.");
-    bonjour.unpublishAll(() => {
-        console.log("Servicios Bonjour despublicados.");
-        bonjour.destroy();
-        console.log("Instancia de Bonjour destruida.");
-        bonjour = null;
-    });
-  } else {
-      console.log("No hay instancia de Bonjour para detener.");
-  }
-  // No poner saveAndSendReport aquí para evitar el error FATAL
-});
+app.on("will-quit", async (event) => {
+    // Previene el cierre inmediato para asegurar que la limpieza se complete
+    event.preventDefault();
+    console.log("Evento 'will-quit' recibido. Limpiando...");
 
-// Cerrar la aplicación si todas las ventanas están cerradas (excepto en macOS)
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    console.log("Todas las ventanas cerradas, saliendo de la aplicación.");
+    // Detener Bonjour
+    if (bonjour) {
+        console.log("Deteniendo Bonjour...");
+        await new Promise(resolve => {
+            bonjour.unpublishAll(() => {
+                bonjour.destroy();
+                console.log("Bonjour detenido.");
+                bonjour = null;
+                resolve();
+            });
+        });
+    } else {
+        console.log("Bonjour ya estaba detenido.");
+    }
+
+    // Limpiar la tabla de pedidos AHORA, justo antes de salir
+    console.log("Limpiando tabla de pedidos antes de salir...");
+    await clearOrdersTable(); // Espera a que termine la limpieza
+    console.log("Limpieza de tabla de pedidos completada.");
+
+    // Ahora permite que la aplicación se cierre
     app.quit();
+});
+
+
+app.on("window-all-closed", () => {
+  // En macOS es común que la aplicación permanezca activa sin ventanas.
+  // En otros sistemas operativos, usualmente se cierra.
+  // La lógica de saveAndSendReport y clearOrdersTable se movió al 'close' de la ventana principal
+  // y 'will-quit' respectivamente, por lo que aquí solo cerramos si no es macOS.
+  if (process.platform !== "darwin") {
+    console.log("Todas las ventanas cerradas, la app se cerrará (manejado por 'will-quit').");
+    // app.quit() se llamará después de 'will-quit'
   }
 });
 
 // --- Manejo de errores no capturados ---
 process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
-    dialog.showErrorBox('Error Inesperado', `Ha ocurrido un error crítico:\n${error.message}\n\nLa aplicación podría necesitar reiniciarse.`);
-    // Considera cerrar la app aquí si el error es muy grave: app.quit();
+    if (mainWindow && !mainWindow.isDestroyed()) dialog.showErrorBox('Error Crítico', `Error: ${error.message}`);
+    // Considera cerrar la app aquí si el error es grave
 });
-
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-    dialog.showErrorBox('Error Inesperado (Promesa)', `Ha ocurrido un error asíncrono no manejado:\n${reason}`);
+     if (mainWindow && !mainWindow.isDestroyed()) dialog.showErrorBox('Error Asíncrono', `Error: ${reason}`);
 });
