@@ -382,7 +382,7 @@ ipcMain.handle("update-order", async (event, orderData) => {
   });
 });
 
-// --- INICIO CÓDIGO delete-order DE LA VERSIÓN ANTERIOR ---
+// Manejador de eliminación y renumeración (Dejado como está, según lo solicitado)
 ipcMain.handle('delete-order', async (event, orderId) => {
     const db = openDb();
     const today = getLocalDate(); // Obtiene la fecha actual YYYY-MM-DD
@@ -402,7 +402,6 @@ ipcMain.handle('delete-order', async (event, orderId) => {
                         }
                         if (this.changes === 0) {
                             console.warn(`[Delete Tx] Pedido ${orderId} no encontrado para eliminar.`);
-                            // Podríamos decidir si continuar o abortar aquí. Por ahora, continuamos.
                         } else {
                             console.log(`[Delete Tx] Pedido ${orderId} eliminado.`);
                         }
@@ -412,7 +411,6 @@ ipcMain.handle('delete-order', async (event, orderId) => {
 
                 // 2. Obtiene todos los pedidos restantes DEL DÍA DE HOY (ordenados por ID original)
                 const remainingOrders = await new Promise((res, rej) => {
-                    // Selecciona solo los pedidos del día actual
                     const sql = `SELECT * FROM pedidos WHERE date(fecha, 'localtime') = ? ORDER BY id ASC`;
                     db.all(sql, [today], (err, rows) => {
                         if (err) {
@@ -424,7 +422,7 @@ ipcMain.handle('delete-order', async (event, orderId) => {
                     });
                 });
 
-                // 3. ¡Elimina TODOS los pedidos DEL DÍA DE HOY! (para luego reinsertarlos renumerados)
+                // 3. ¡Elimina TODOS los pedidos DEL DÍA DE HOY!
                 await new Promise((res, rej) => {
                     db.run(`DELETE FROM pedidos WHERE date(fecha, 'localtime') = ?`, [today], function(err) {
                         if (err) {
@@ -437,14 +435,10 @@ ipcMain.handle('delete-order', async (event, orderId) => {
                 });
 
                 // 4. Resetea el contador de autoincremento para la tabla 'pedidos'.
-                //    Esto hará que el próximo INSERT empiece desde 1 (o el siguiente ID disponible si hubiera pedidos de otros días).
-                //    Si solo queremos renumerar los de hoy desde 1, esto podría no ser lo ideal si hay pedidos de otros días.
-                //    NOTA: Si SQLite no encuentra la fila, no da error.
                 await new Promise((res, rej) => {
                     db.run(`DELETE FROM sqlite_sequence WHERE name='pedidos'`, err => {
                         if (err) {
                            console.warn(`[Delete Tx] Advertencia: No se pudo eliminar la secuencia de 'pedidos'. Puede que no existiera aún: ${err.message}`);
-                           // No rechazamos la promesa aquí, ya que puede ser normal si la tabla está vacía.
                         } else {
                            console.log(`[Delete Tx] Secuencia de autoincremento para 'pedidos' reseteada.`);
                         }
@@ -457,9 +451,8 @@ ipcMain.handle('delete-order', async (event, orderId) => {
                 for (const order of remainingOrders) {
                     const sql = `INSERT INTO pedidos (cliente_nombre, cliente_telefono, total, items_json, fecha, estado, tipo_entrega, hora_entrega, forma_pago, estado_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
                     const params = [order.cliente_nombre, order.cliente_telefono, order.total, order.items_json, order.fecha, order.estado, order.tipo_entrega, order.hora_entrega, order.forma_pago, order.estado_pago];
-                    // El ID será asignado automáticamente por SQLite, empezando desde 1 (o el siguiente disponible globalmente)
                     await new Promise((res, rej) => {
-                        db.run(sql, params, function(err) { // Usar function para obtener lastID
+                        db.run(sql, params, function(err) {
                             if (err) {
                                 console.error(`[Delete Tx] Error reinsertando pedido (ID original ${order.id}): ${err.message}`);
                                 return rej(err);
@@ -488,7 +481,7 @@ ipcMain.handle('delete-order', async (event, orderId) => {
                 // Intenta revertir la transacción en caso de cualquier error
                 await new Promise((res) => db.run('ROLLBACK', err => {
                      if(err) console.error(`[Delete Tx] Error durante ROLLBACK: ${err.message}`);
-                     res(); // Resuelve incluso si el rollback falla, para poder cerrar la DB.
+                     res();
                 }));
                 resolve(false); // Indica que la operación falló
             } finally {
@@ -500,8 +493,7 @@ ipcMain.handle('delete-order', async (event, orderId) => {
         });
     });
 });
-// --- FIN CÓDIGO delete-order DE LA VERSIÓN ANTERIOR ---
-
+// Fin del manejador delete-order
 
 // Cancelar impresión (borrar archivo temporal)
 ipcMain.handle("cancel-print", (event, filePath) => {
@@ -519,7 +511,7 @@ ipcMain.handle("cancel-print", (event, filePath) => {
 async function generateDailyReport(autoSavePath = null) {
   const db = openDb(true);
   const today = getLocalDate();
-  const sql = `SELECT * FROM pedidos WHERE date(fecha, 'localtime') = ? ORDER BY id ASC`; // Ordenar por ID ascendente para el reporte
+  const sql = `SELECT * FROM pedidos WHERE date(fecha, 'localtime') = ? ORDER BY id ASC`;
 
   let orders = [];
   try {
@@ -538,7 +530,6 @@ async function generateDailyReport(autoSavePath = null) {
       });
   }
 
-
   if (orders.length === 0) {
     console.log("No hay pedidos para generar reporte hoy.");
     return { success: false, message: "No hay pedidos guardados para el día de hoy." };
@@ -547,13 +538,13 @@ async function generateDailyReport(autoSavePath = null) {
   let reportData = [];
   let totalVentas = 0;
   orders.forEach((order) => {
-    try { // Añadir try-catch por si items_json está mal formado
+    try {
       const items = JSON.parse(order.items_json);
       items.forEach((item) => {
         const agregadosStr = item.extras && item.extras.length > 0 ? item.extras.map((e) => e.nombre).join(", ") : "";
         reportData.push({
           "ID Pedido": order.id,
-          Fecha: new Date(order.fecha).toLocaleTimeString("es-CL"), // Solo hora para simplificar
+          Fecha: new Date(order.fecha).toLocaleTimeString("es-CL"),
           Cliente: order.cliente_nombre,
           "Estado Pedido": order.estado,
           "Estado Pago": order.estado_pago,
@@ -567,43 +558,39 @@ async function generateDailyReport(autoSavePath = null) {
       totalVentas += order.total;
     } catch (parseError) {
       console.error(`Error al parsear items del pedido #${order.id}:`, parseError);
-      // Opcional: añadir una fila de error al reporte
       reportData.push({ "ID Pedido": order.id, Cliente: order.cliente_nombre, Producto: "ERROR AL LEER ITEMS" });
     }
   });
 
-  // Fila separadora y Total
-  reportData.push({}); // Fila vacía como separador
+  reportData.push({});
   reportData.push({ Producto: "TOTAL VENTAS", "Precio Item": totalVentas });
 
   const workbook = xlsx.utils.book_new();
   const worksheet = xlsx.utils.json_to_sheet(reportData);
 
-  // Ajustar anchos de columna (aproximado)
   worksheet["!cols"] = [
-    { wch: 8 },  // ID Pedido
-    { wch: 10 }, // Fecha (Hora)
-    { wch: 25 }, // Cliente
-    { wch: 15 }, // Estado Pedido
-    { wch: 15 }, // Estado Pago
-    { wch: 15 }, // Forma de Pago
-    { wch: 35 }, // Producto
-    { wch: 30 }, // Agregados
-    { wch: 30 }, // Notas
-    { wch: 12 }, // Precio Item
+    { wch: 8 },
+    { wch: 10 },
+    { wch: 25 },
+    { wch: 15 },
+    { wch: 15 },
+    { wch: 15 },
+    { wch: 35 },
+    { wch: 30 },
+    { wch: 30 },
+    { wch: 12 },
   ];
 
   xlsx.utils.book_append_sheet(workbook, worksheet, "Ventas del Día");
 
-  let finalPath = autoSavePath; // Usar la ruta automática si se proporcionó
+  let finalPath = autoSavePath;
 
   if (!finalPath) {
-    // Si no hay ruta automática, preguntar al usuario dónde guardar
     const defaultPath = path.join(
       app.getPath("documents"),
       `Reporte-Piamonte-${today}.xlsx`
     );
-    const result = await dialog.showSaveDialog(mainWindow, { // Pasar mainWindow para que el diálogo sea modal
+    const result = await dialog.showSaveDialog(mainWindow, {
       title: "Guardar Reporte de Ventas",
       defaultPath: defaultPath,
       filters: [{ name: "Excel Files", extensions: ["xlsx"] }],
@@ -615,7 +602,6 @@ async function generateDailyReport(autoSavePath = null) {
     finalPath = result.filePath;
   }
 
-  // Guardar el archivo Excel
   try {
     xlsx.writeFile(workbook, finalPath);
     console.log(`Reporte guardado en: ${finalPath}`);
@@ -626,7 +612,7 @@ async function generateDailyReport(autoSavePath = null) {
   }
 }
 
-ipcMain.handle("generate-report", () => generateDailyReport()); // Para el botón manual
+ipcMain.handle("generate-report", () => generateDailyReport());
 
 // Guardar reporte localmente y enviarlo por correo (usado al cerrar)
 async function saveAndSendReport() {
@@ -634,7 +620,6 @@ async function saveAndSendReport() {
   const desktopPath = app.getPath("desktop"); // Guardar en Escritorio
   const reportsFolderPath = path.join(desktopPath, "reportes"); // Carpeta 'reportes' en Escritorio
 
-  // Crear carpeta si no existe
   try {
     if (!fs.existsSync(reportsFolderPath)) {
       fs.mkdirSync(reportsFolderPath, { recursive: true });
@@ -650,28 +635,24 @@ async function saveAndSendReport() {
     `Reporte-Piamonte-${today}.xlsx`
   );
 
-  // Generar y guardar el reporte localmente
   const localReportResult = await generateDailyReport(localReportPath);
 
   if (!localReportResult.success && localReportResult.message === "No hay pedidos guardados para el día de hoy.") {
-      if (mainWindow && !mainWindow.isDestroyed()) { // Solo mostrar si la ventana existe
+      if (mainWindow && !mainWindow.isDestroyed()) {
         dialog.showMessageBoxSync(mainWindow, {
             type: "info",
             title: "Sin Reporte",
             message: "No se encontraron ventas el día de hoy. No se generó ningún reporte.",
         });
       }
-      console.log("No hay reporte para guardar o enviar.");
-      return; // Salir si no hay pedidos
+      return;
   } else if (!localReportResult.success) {
-      // Hubo otro error al generar/guardar localmente
       if (mainWindow && !mainWindow.isDestroyed()) {
         dialog.showErrorBox("Error Guardado Local", `No se pudo generar o guardar el reporte localmente:\n${localReportResult.message}`);
       }
       return;
   }
 
-  // Si se guardó localmente, informar al usuario (solo si la ventana existe)
   if (mainWindow && !mainWindow.isDestroyed()) {
     dialog.showMessageBoxSync(mainWindow, {
         type: "info",
@@ -681,7 +662,6 @@ async function saveAndSendReport() {
   }
 
 
-  // Intentar enviar por correo con Gmail
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !process.env.EMAIL_TO || !process.env.EMAIL_FROM) {
     console.log("Faltan credenciales de Gmail en .env. Omitiendo envío de correo.");
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -691,7 +671,7 @@ async function saveAndSendReport() {
             message: "No se configuraron todas las credenciales de correo en .env para enviar el reporte automáticamente.",
         });
     }
-    return; // Salir si falta configuración
+    return;
   }
 
   const transporter = nodemailer.createTransport({
@@ -713,7 +693,7 @@ async function saveAndSendReport() {
       attachments: [
         {
           filename: `Reporte-Piamonte-${today}.xlsx`,
-          path: localReportPath, // Usar la ruta del archivo local generado
+          path: localReportPath,
         },
       ],
     });
@@ -736,8 +716,7 @@ async function saveAndSendReport() {
   }
 }
 
-// Limpiar tabla de pedidos (¡Usar con precaución!)
-// Esta función ahora solo limpia la tabla, la renumeración se hace en delete-order
+// Función para limpiar la tabla de pedidos del día (Se llama al cerrar la app)
 async function clearOrdersTable() {
     console.log('Limpiando y reseteando la tabla de pedidos...');
     const db = openDb();
@@ -758,11 +737,10 @@ async function clearOrdersTable() {
 }
 
 
-// Obtener pedidos del día
+// ⭐️ MANEJADOR FALTANTE RESTAURADO
 ipcMain.handle("get-todays-orders", async () => {
   const db = openDb(true);
   const today = getLocalDate();
-  // Ordenar por ID ASCENDENTE para mostrarlos en orden cronológico en la interfaz
   const sql = `SELECT * FROM pedidos WHERE date(fecha, 'localtime') = ? ORDER BY id DESC`;
   try {
     const orders = await new Promise((resolve, reject) => {
@@ -1054,25 +1032,27 @@ const createWindow = () => {
 
   mainWindow.webContents.session.clearCache().then(() => mainWindow.loadFile("index.html"));
 
+  // ⭐️ MANEJADOR DE CIERRE DE VENTANA (Garantiza la espera)
   mainWindow.on('close', async (event) => {
     console.log("Ventana principal intentando cerrar...");
-    event.preventDefault();
+    event.preventDefault(); // Detiene el cierre para ejecutar el proceso asíncrono
     try {
-        console.log("Generando y enviando reporte final (si aplica)...");
+        console.log("Generando reporte y limpiando historial. Por favor, espere...");
         if (mainWindow && !mainWindow.isDestroyed()) {
-             dialog.showMessageBox(mainWindow, { type: 'info', title: 'Cerrando', message: 'Generando reporte final...', buttons: [] });
+             dialog.showMessageBox(mainWindow, { type: 'info', title: 'Cerrando', message: 'Generando reporte final y limpiando historial...', buttons: [] });
         }
-        await saveAndSendReport(); // Guarda local y envía email
+        
+        await saveAndSendReport(); // Espera: Guarda y envía el reporte (Reporte)
+        await clearOrdersTable(); // ⭐️ Espera: Borra el historial (Tu Requisito principal)
 
-        // --> Llamada a clearOrdersTable movida al evento 'will-quit'
-        // await clearOrdersTable();
-
-        console.log("Proceso de cierre (reporte/limpieza) finalizado.");
+        console.log("Proceso de reporte/limpieza finalizado. Destruyendo ventana.");
+        
+        // ⭐️ Destruimos la ventana para permitir que el evento 'window-all-closed' se dispare.
          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
     } catch (error) {
         console.error("Error durante el proceso de cierre:", error);
         if (mainWindow && !mainWindow.isDestroyed()) dialog.showErrorBox("Error al Cerrar", `Ocurrió un error:\n${error.message}`);
-         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy(); // Cierra igual
+         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy(); // Cierra igual si hay error
     } finally {
         mainWindow = null;
     }
@@ -1094,10 +1074,9 @@ app.whenReady().then(() => {
 });
 
 app.on("will-quit", async (event) => {
-    // Previene el cierre inmediato para asegurar que la limpieza se complete
-    event.preventDefault();
-    console.log("Evento 'will-quit' recibido. Limpiando...");
-
+    // Este evento se usa para asegurar que Bonjour se detenga y la app salga.
+    // La limpieza principal se maneja en el 'close' de la ventana.
+    
     // Detener Bonjour
     if (bonjour) {
         console.log("Deteniendo Bonjour...");
@@ -1109,28 +1088,15 @@ app.on("will-quit", async (event) => {
                 resolve();
             });
         });
-    } else {
-        console.log("Bonjour ya estaba detenido.");
     }
-
-    // Limpiar la tabla de pedidos AHORA, justo antes de salir
-    console.log("Limpiando tabla de pedidos antes de salir...");
-    await clearOrdersTable(); // Espera a que termine la limpieza
-    console.log("Limpieza de tabla de pedidos completada.");
-
-    // Ahora permite que la aplicación se cierre
-    app.quit();
+    // No hay necesidad de prevenir el cierre aquí, ya que la limpieza se hizo en el 'close' de la ventana.
 });
 
 
 app.on("window-all-closed", () => {
-  // En macOS es común que la aplicación permanezca activa sin ventanas.
-  // En otros sistemas operativos, usualmente se cierra.
-  // La lógica de saveAndSendReport y clearOrdersTable se movió al 'close' de la ventana principal
-  // y 'will-quit' respectivamente, por lo que aquí solo cerramos si no es macOS.
   if (process.platform !== "darwin") {
-    console.log("Todas las ventanas cerradas, la app se cerrará (manejado por 'will-quit').");
-    // app.quit() se llamará después de 'will-quit'
+    // Si no es macOS, la app debe salir.
+    app.quit();
   }
 });
 
@@ -1138,7 +1104,6 @@ app.on("window-all-closed", () => {
 process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
     if (mainWindow && !mainWindow.isDestroyed()) dialog.showErrorBox('Error Crítico', `Error: ${error.message}`);
-    // Considera cerrar la app aquí si el error es grave
 });
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
