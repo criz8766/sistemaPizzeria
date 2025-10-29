@@ -67,7 +67,7 @@
         background: linear-gradient(90deg, #f97316 0%, #ea580c 100%);
         border-radius: 2px 2px 0 0;
       }
-      
+
       /* Barra de título personalizada */
       #title-bar {
         -webkit-app-region: drag;
@@ -80,7 +80,7 @@
       #title-bar-btns {
         -webkit-app-region: no-drag;
       }
-      
+
       .title-bar-btn {
         display: inline-flex;
         justify-content: center;
@@ -95,7 +95,7 @@
         background-color: rgba(255, 255, 255, 0.1);
         color: white;
       }
-      
+
       #close-btn:hover {
         background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
         color: white;
@@ -156,6 +156,9 @@
       select,
       textarea {
         transition: all 0.2s ease;
+        border-radius: 0.5rem; /* Asegurar bordes redondeados */
+        padding: 0.75rem; /* Ajustar padding */
+        border: 1px solid #e2e8f0; /* Borde base */
       }
       input[type="text"]:focus,
       input[type="tel"]:focus,
@@ -167,6 +170,17 @@
         box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
         outline: none;
       }
+
+       /* Ajuste específico para select */
+       select {
+         appearance: none;
+         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+         background-position: right 0.5rem center;
+         background-repeat: no-repeat;
+         background-size: 1.5em 1.5em;
+         padding-right: 2.5rem;
+       }
+
 
       /* Modales mejorados */
       .modal-content {
@@ -229,10 +243,35 @@
       .z-10 {
         z-index: 10 !important;
       }
+      /* CRUD: Estilos adicionales para la tabla de productos */
+      .product-table th, .product-table td {
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 0.875rem; /* Tamaño de fuente ligeramente más pequeño */
+      }
+      .product-table th {
+        background-color: #f8fafc;
+        font-weight: 600;
+        color: #475569;
+        text-transform: capitalize; /* Capitalizar cabeceras */
+      }
+      .product-table tbody tr:hover {
+        background-color: #f1f5f9;
+      }
+       .product-table td:last-child {
+         text-align: right; /* Alinear botones a la derecha */
+       }
+        /* Estilo para botones pequeños en tabla */
+        .table-action-btn {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s ease;
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 font-sans antialiased text-gray-800 overflow-hidden">
-    <!-- Barra de título personalizada -->
     <div id="title-bar" class="w-full flex justify-between items-center fixed top-0 left-0 z-50">
       <div class="pl-4 font-bold text-sm text-white flex items-center gap-2">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
@@ -252,7 +291,6 @@
     </div>
 
     <div class="flex h-screen pt-11">
-      <!-- Sidebar del pedido actual -->
       <aside class="w-1/3 max-w-md sidebar-glass p-6 shadow-2xl flex flex-col">
         <div class="flex items-center gap-3 mb-6 pb-4 border-b-2 border-orange-200">
           <div class="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
@@ -260,13 +298,13 @@
           </div>
           <h2 class="text-2xl font-bold text-gray-900">Pedido Actual</h2>
         </div>
-        
+
         <div class="flex-grow overflow-y-auto pr-2 space-y-4">
           <div class="space-y-3 bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <input type="text" id="customer-name" class="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all" placeholder="Nombre Cliente o Mesa *">
-            <input type="tel" id="customer-phone" class="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all" placeholder="Teléfono (Opcional)">
+            <input type="text" id="customer-name" placeholder="Nombre Cliente o Mesa *">
+            <input type="tel" id="customer-phone" placeholder="Teléfono (Opcional)">
           </div>
-          
+
           <hr class="my-4 border-gray-200">
 
           <div id="order-details" class="space-y-4 text-sm">
@@ -276,20 +314,22 @@
                 Entrega
               </h3>
               <div class="flex gap-3">
-                <label class="flex items-center cursor-pointer px-4 py-2 rounded-lg border-2 border-gray-200 hover:border-orange-300 transition-all">
-                  <input id="delivery-delay" name="delivery-type" type="radio" value="demora" class="mr-2 text-orange-500" checked>
-                  <span class="font-medium">Demora</span>
+                <label class="flex items-center cursor-pointer px-4 py-2 rounded-lg border hover:border-orange-300 transition-all">
+                  <input id="delivery-delay" name="delivery-type" type="radio" value="demora" class="mr-2 text-orange-500 focus:ring-orange-500" checked>
+                  <span class="font-medium text-sm">Demora</span>
                 </label>
-                <label class="flex items-center cursor-pointer px-4 py-2 rounded-lg border-2 border-gray-200 hover:border-orange-300 transition-all">
-                  <input id="delivery-scheduled" name="delivery-type" type="radio" value="agendado" class="mr-2 text-orange-500">
-                  <span class="font-medium">Agendado</span>
+                <label class="flex items-center cursor-pointer px-4 py-2 rounded-lg border hover:border-orange-300 transition-all">
+                  <input id="delivery-scheduled" name="delivery-type" type="radio" value="agendado" class="mr-2 text-orange-500 focus:ring-orange-500">
+                  <span class="font-medium text-sm">Agendado</span>
                 </label>
               </div>
               <div id="delivery-delay-input" class="mt-3">
-                <input type="number" id="delay-minutes" value="25" class="w-full p-2 text-sm border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:outline-none transition-all" placeholder="Minutos">
+                 <label for="delay-minutes" class="sr-only">Minutos de demora</label>
+                 <input type="number" id="delay-minutes" value="25" placeholder="Minutos">
               </div>
               <div id="delivery-scheduled-input" class="mt-3 hidden">
-                <input type="time" id="scheduled-time" class="w-full p-2 text-sm border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:outline-none transition-all">
+                 <label for="scheduled-time" class="sr-only">Hora agendada</label>
+                 <input type="time" id="scheduled-time">
               </div>
             </div>
 
@@ -299,17 +339,18 @@
                 Pago
               </h3>
               <div class="flex gap-3">
-                <label class="flex items-center cursor-pointer px-4 py-2 rounded-lg border-2 border-gray-200 hover:border-orange-300 transition-all">
-                  <input id="status-unpaid" name="payment-status" type="radio" value="Por Pagar" class="mr-2 text-orange-500" checked>
-                  <span class="font-medium">Por Pagar</span>
+                <label class="flex items-center cursor-pointer px-4 py-2 rounded-lg border hover:border-orange-300 transition-all">
+                  <input id="status-unpaid" name="payment-status" type="radio" value="Por Pagar" class="mr-2 text-orange-500 focus:ring-orange-500" checked>
+                  <span class="font-medium text-sm">Por Pagar</span>
                 </label>
-                <label class="flex items-center cursor-pointer px-4 py-2 rounded-lg border-2 border-gray-200 hover:border-orange-300 transition-all">
-                  <input id="status-paid" name="payment-status" type="radio" value="Pagado" class="mr-2 text-orange-500">
-                  <span class="font-medium">Pagado</span>
+                <label class="flex items-center cursor-pointer px-4 py-2 rounded-lg border hover:border-orange-300 transition-all">
+                  <input id="status-paid" name="payment-status" type="radio" value="Pagado" class="mr-2 text-orange-500 focus:ring-orange-500">
+                  <span class="font-medium text-sm">Pagado</span>
                 </label>
               </div>
               <div id="payment-method-wrapper" class="mt-3 hidden">
-                <select id="payment-method" class="w-full p-2 text-sm border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:outline-none transition-all">
+                 <label for="payment-method" class="sr-only">Método de pago</label>
+                <select id="payment-method">
                   <option>Efectivo</option>
                   <option>Debito</option>
                   <option>Credito</option>
@@ -319,7 +360,8 @@
                   <option value="otra">Otra</option>
                 </select>
                 <div id="other-payment-wrapper" class="mt-2 hidden">
-                  <input type="text" id="other-payment-method" class="w-full p-2 text-sm border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:outline-none transition-all" placeholder="Especificar...">
+                   <label for="other-payment-method" class="sr-only">Otro método de pago</label>
+                   <input type="text" id="other-payment-method" placeholder="Especificar...">
                 </div>
               </div>
             </div>
@@ -335,7 +377,7 @@
             <span class="text-gray-700">TOTAL:</span>
             <span id="total-price" class="text-orange-600">$0</span>
           </div>
-          
+
           <div id="action-buttons-container" class="space-y-3">
             <button id="update-order-btn" class="w-full btn-secondary text-white font-bold py-4 rounded-xl text-lg transition-all hidden">
               Actualizar Pedido
@@ -347,9 +389,7 @@
         </div>
       </aside>
 
-      <!-- Área principal -->
       <main class="w-2/3 flex-1 flex flex-col overflow-hidden">
-        <!-- Pestañas principales -->
         <div class="px-6 pt-6 bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 z-10">
           <div class="flex border-b-2 border-gray-200 bg-white rounded-t-xl shadow-sm">
             <button class="tab-button active py-3 px-6 font-semibold border-b-4" data-target="catalog-tab-content">
@@ -361,14 +401,13 @@
             <button class="tab-button py-3 px-6 font-semibold border-b-4 border-transparent text-gray-500 hover:text-orange-600 hover:bg-orange-50" data-target="inventory-tab-content">
               📦 Inventario
             </button>
-            <button class="tab-button py-3 px-6 font-semibold border-b-4 border-transparent text-gray-500 hover:text-orange-600 hover:bg-orange-50" data-target="settings-tab-content">
-              ⚙️ Configuración
+            <button class="tab-button py-3 px-6 font-semibold border-b-4 border-transparent text-gray-500 hover:text-orange-600 hover:bg-orange-50" data-target="products-tab-content">
+              🍕 Productos
             </button>
-          </div>
+            </div>
         </div>
 
         <div class="flex-1 overflow-y-auto bg-white">
-          <!-- Tab: Catálogo -->
           <div id="catalog-tab-content" class="tab-content flex flex-col p-6">
             <div class="flex justify-between items-center mb-6">
               <div class="flex gap-2 bg-gray-100 p-1.5 rounded-xl shadow-inner">
@@ -383,11 +422,12 @@
                 </button>
               </div>
               <div class="relative w-1/3">
-                <input type="text" id="search-products" class="w-full p-3 pl-11 text-sm border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all shadow-sm" placeholder="Buscar producto...">
+                 <label for="search-products" class="sr-only">Buscar Producto</label>
+                 <input type="text" id="search-products" class="w-full pl-11 text-sm" placeholder="Buscar producto...">
                 <svg class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
               </div>
             </div>
-            
+
             <div id="catalog-content">
               <div id="pizzas-tab" class="sub-tab-content grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
               <div id="churrascos-tab" class="sub-tab-content hidden grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
@@ -395,7 +435,6 @@
             </div>
           </div>
 
-          <!-- Tab: Historial -->
           <div id="history-tab-content" class="tab-content hidden p-6">
             <div class="flex justify-between items-center mb-6 bg-gradient-to-r from-slate-700 to-slate-800 text-white p-4 rounded-xl shadow-lg">
               <h2 class="text-xl font-bold flex items-center gap-2">
@@ -408,8 +447,7 @@
             </div>
             <div id="history-list" class="space-y-4"></div>
           </div>
-          
-          <!-- Tab: Inventario -->
+
           <div id="inventory-tab-content" class="tab-content hidden p-6">
             <div class="flex justify-between items-center mb-6 bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4 rounded-xl shadow-lg">
               <h2 class="text-2xl font-bold flex items-center gap-2">
@@ -428,62 +466,56 @@
             <div id="inventory-container" class="space-y-6"></div>
           </div>
 
-          <!-- Tab: Configuración -->
-          <div id="settings-tab-content" class="tab-content hidden p-6">
-            <div class="flex justify-between items-center mb-6 bg-gradient-to-r from-purple-600 to-purple-700 text-white p-4 rounded-xl shadow-lg">
-              <h2 class="text-2xl font-bold flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 1v6m0 6v6m5.2-13.2l-4.2 4.2m0 6l4.2 4.2M23 12h-6m-6 0H1m18.2 5.2l-4.2-4.2m0-6l4.2-4.2"></path></svg>
-                Configuración de Precios
-              </h2>
-              <button id="save-prices-btn" class="bg-white text-purple-700 font-bold py-2 px-5 rounded-lg hover:bg-purple-50 transition-all shadow-md">
-                💾 Guardar Cambios
-              </button>
-            </div>
-            <div id="price-settings-container" class="space-y-8"></div>
+          <div id="products-tab-content" class="tab-content hidden p-6">
+            <div class="flex justify-between items-center mb-6 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white p-4 rounded-xl shadow-lg">
+                <h2 class="text-2xl font-bold flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    Gestión de Productos
+                </h2>
+                </div>
+            <div id="product-management-container" class="space-y-8">
+                </div>
           </div>
-        </div>
+
+          </div>
       </main>
     </div>
 
-    <!-- Modal: Pizza -->
-    <div id="pizza-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center p-4 z-50">
+     <div id="pizza-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center p-4 z-50">
       <div class="modal-content bg-white p-8 rounded-2xl shadow-2xl w-1/2 max-w-2xl border-2 border-orange-200">
         <h2 id="modal-pizza-name" class="text-3xl font-bold mb-6 text-gray-900 border-b-2 border-orange-200 pb-3"></h2>
-        
         <div class="mb-6">
           <h3 class="font-bold text-lg mb-3 text-gray-700">Tamaño</h3>
           <div id="size-options" class="flex gap-3">
-            <button class="size-button border-2 rounded-xl px-6 py-3 font-semibold" data-size="chica">Chica</button>
-            <button class="size-button border-2 rounded-xl px-6 py-3 font-semibold" data-size="mediana">Mediana</button>
-            <button class="size-button border-2 rounded-xl px-6 py-3 font-semibold" data-size="xl">XL</button>
+            <button class="size-button border rounded-xl px-6 py-3 font-semibold" data-size="chica">Chica</button>
+            <button class="size-button border rounded-xl px-6 py-3 font-semibold" data-size="mediana">Mediana</button>
+            <button class="size-button border rounded-xl px-6 py-3 font-semibold" data-size="xl">XL</button>
           </div>
         </div>
-
         <div id="half-and-half-section" class="hidden mb-6 p-4 bg-orange-50 rounded-xl border-2 border-orange-200">
           <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" id="half-and-half-checkbox" class="w-5 h-5 text-orange-500">
+            <input type="checkbox" id="half-and-half-checkbox" class="w-5 h-5 text-orange-500 focus:ring-orange-500">
             <span class="font-bold text-gray-700">🍕 Pedir Mitad y Mitad</span>
           </label>
           <div id="half-options" class="hidden mt-3 grid grid-cols-2 gap-4">
-            <select id="half-1" class="border-2 border-gray-200 p-2 rounded-lg focus:border-orange-500 focus:outline-none"></select>
-            <select id="half-2" class="border-2 border-gray-200 p-2 rounded-lg focus:border-orange-500 focus:outline-none"></select>
+            <select id="half-1"></select>
+            <select id="half-2"></select>
           </div>
         </div>
-
         <div class="mb-6">
           <h3 class="font-bold text-lg mb-3 text-gray-700">Agregados</h3>
           <div class="relative mb-3">
-            <input type="text" id="search-extras" class="w-full p-2 pl-10 text-sm border-2 border-gray-200 rounded-lg focus:outline-none focus:border-orange-500" placeholder="Buscar agregado...">
+            <label for="search-extras" class="sr-only">Buscar Agregado</label>
+            <input type="text" id="search-extras" class="w-full pl-10 text-sm" placeholder="Buscar agregado...">
             <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
           </div>
-          <div id="extras-container" class="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto p-3 border-2 border-gray-200 rounded-xl bg-gray-50"></div>
+          <div id="extras-container" class="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto p-3 border rounded-xl bg-gray-50"></div>
         </div>
-
         <div class="mb-6">
           <h3 class="font-bold text-lg mb-3 text-gray-700">Notas Adicionales</h3>
-          <textarea id="pizza-notes" class="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none" rows="3" placeholder="Ej: Sin cebolla, masa bien cocida..."></textarea>
+          <label for="pizza-notes" class="sr-only">Notas para la pizza</label>
+          <textarea id="pizza-notes" rows="3" placeholder="Ej: Sin cebolla, masa bien cocida..."></textarea>
         </div>
-
         <div class="flex justify-between items-center pt-4 border-t-2 border-gray-200">
           <span id="modal-pizza-price" class="text-3xl font-bold text-orange-600"></span>
           <div class="flex gap-3">
@@ -498,11 +530,10 @@
       </div>
     </div>
 
-    <!-- Modal: Vista Previa -->
     <div id="preview-modal" class="fixed inset-0 bg-black bg-opacity-75 hidden flex items-center justify-center p-4 z-50">
       <div class="modal-content bg-white p-6 rounded-2xl shadow-2xl w-1/3 flex flex-col border-2 border-gray-200" style="height: 90vh;">
-        <h2 class="text-2xl font-bold mb-4 border-b-2 border-orange-200 pb-3 text-gray-900">Vista Previa del Ticket</h2>
-        <div class="flex-grow border-2 border-gray-200 rounded-xl overflow-hidden shadow-inner">
+        <h2 class="text-2xl font-bold mb-4 border-b-2 border-orange-200 pb-3 text-gray-900">Vista Previa</h2>
+        <div class="flex-grow border rounded-xl overflow-hidden shadow-inner bg-gray-100">
           <embed id="pdf-preview" src="" type="application/pdf" width="100%" height="100%">
         </div>
         <div class="flex gap-4 mt-6">
@@ -516,13 +547,13 @@
       </div>
     </div>
 
-    <!-- Modal: Notas -->
     <div id="notes-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center p-4 z-50">
       <div class="modal-content bg-white p-8 rounded-2xl shadow-2xl w-1/3 border-2 border-orange-200">
         <h2 id="notes-modal-product-name" class="text-2xl font-bold mb-6 text-gray-900 border-b-2 border-orange-200 pb-3"></h2>
         <div class="mb-6">
           <h3 class="font-bold text-lg mb-3 text-gray-700">Indicaciones Adicionales</h3>
-          <textarea id="product-notes" class="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none" rows="4" placeholder="Ej: Sin tomate, bien cocido..."></textarea>
+          <label for="product-notes" class="sr-only">Notas para el producto</label>
+          <textarea id="product-notes" rows="4" placeholder="Ej: Sin tomate, bien cocido..."></textarea>
         </div>
         <div class="flex gap-4 mt-6">
           <button id="notes-cancel-btn" class="w-full px-6 py-3 bg-gray-200 rounded-xl font-bold hover:bg-gray-300 transition-all">
@@ -535,13 +566,12 @@
       </div>
     </div>
 
-    <!-- Modal: Confirmar Pago -->
     <div id="confirm-payment-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center p-4 z-50">
       <div class="modal-content bg-white p-8 rounded-2xl shadow-2xl w-1/3 border-2 border-green-200">
         <h2 class="text-2xl font-bold mb-6 text-gray-900 border-b-2 border-green-200 pb-3">Confirmar Pago</h2>
         <div class="mb-6">
           <label for="history-payment-method" class="block text-sm font-bold text-gray-700 mb-2">Forma de Pago</label>
-          <select id="history-payment-method" class="w-full border-2 border-gray-200 rounded-xl shadow-sm py-3 px-4 focus:border-green-500 focus:outline-none">
+          <select id="history-payment-method">
             <option>Efectivo</option>
             <option>Debito</option>
             <option>Credito</option>
@@ -552,7 +582,7 @@
           </select>
           <div id="history-other-payment-wrapper" class="mt-3 hidden">
             <label for="history-other-payment-method" class="block text-sm font-bold text-gray-700 mb-2">Especificar otra forma de pago</label>
-            <input type="text" id="history-other-payment-method" class="w-full border-2 border-gray-200 rounded-xl shadow-sm py-3 px-4 focus:border-green-500 focus:outline-none">
+            <input type="text" id="history-other-payment-method">
           </div>
         </div>
         <div class="flex gap-4 mt-6">
@@ -566,30 +596,27 @@
       </div>
     </div>
 
-    <!-- Modal: Pizza Personalizada -->
     <div id="custom-pizza-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center p-4 z-50">
       <div class="modal-content bg-white p-8 rounded-2xl shadow-2xl w-1/2 max-w-lg border-2 border-orange-200">
         <h2 class="text-3xl font-bold mb-6 text-gray-900 border-b-2 border-orange-200 pb-3">🍕 Pizza Personalizada</h2>
-        
         <div class="mb-6">
           <h3 class="font-bold text-lg mb-3 text-gray-700">Tamaño</h3>
           <div id="custom-size-options" class="flex gap-3">
-            <button class="size-button border-2 rounded-xl px-6 py-3 font-semibold" data-size="chica">Chica</button>
-            <button class="size-button border-2 rounded-xl px-6 py-3 font-semibold active" data-size="mediana">Mediana</button>
-            <button class="size-button border-2 rounded-xl px-6 py-3 font-semibold" data-size="xl">XL</button>
+            <button class="size-button border rounded-xl px-6 py-3 font-semibold" data-size="chica">Chica</button>
+            <button class="size-button border rounded-xl px-6 py-3 font-semibold active" data-size="mediana">Mediana</button>
+            <button class="size-button border rounded-xl px-6 py-3 font-semibold" data-size="xl">XL</button>
           </div>
         </div>
-
         <div class="mb-6">
           <h3 class="font-bold text-lg mb-3 text-gray-700">Ingredientes</h3>
-          <textarea id="custom-pizza-ingredients" class="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none" rows="3" placeholder="Ej: Carne, tocino, doble queso..."></textarea>
+           <label for="custom-pizza-ingredients" class="sr-only">Ingredientes pizza personalizada</label>
+           <textarea id="custom-pizza-ingredients" rows="3" placeholder="Ej: Carne, tocino, doble queso..."></textarea>
         </div>
-
         <div class="mb-6">
           <h3 class="font-bold text-lg mb-3 text-gray-700">Precio Final</h3>
-          <input type="number" id="custom-pizza-price-input" class="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none" placeholder="Ej: 12500">
+           <label for="custom-pizza-price-input" class="sr-only">Precio pizza personalizada</label>
+           <input type="number" id="custom-pizza-price-input" placeholder="Ej: 12500">
         </div>
-
         <div class="flex justify-end gap-4 pt-4 border-t-2 border-gray-200">
           <button id="custom-cancel-button" class="px-6 py-3 bg-gray-200 rounded-xl font-bold hover:bg-gray-300 transition-all">
             Cancelar
@@ -601,7 +628,6 @@
       </div>
     </div>
 
-    <!-- Modal: Confirmar Eliminación -->
     <div id="confirm-delete-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center p-4 z-50">
       <div class="modal-content bg-white p-8 rounded-2xl shadow-2xl w-1/3 max-w-sm border-2 border-red-200">
         <h2 class="text-xl font-bold mb-4 text-gray-900 border-b-2 border-red-200 pb-3">⚠️ Confirmar Eliminación</h2>
@@ -617,7 +643,6 @@
       </div>
     </div>
 
-    <!-- Modal: Alerta -->
     <div id="alert-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center p-4 z-50">
       <div class="modal-content bg-white p-8 rounded-2xl shadow-2xl w-1/3 max-w-sm border-2 border-blue-200">
         <h2 class="text-xl font-bold mb-4 text-gray-900 border-b-2 border-blue-200 pb-3">ℹ️ Aviso</h2>
@@ -629,7 +654,106 @@
         </div>
       </div>
     </div>
-    
+
+    <div id="product-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center p-4 z-50">
+        <div class="modal-content bg-white p-8 rounded-2xl shadow-2xl w-1/2 max-w-2xl border-2 border-indigo-200 max-h-[90vh] overflow-y-auto">
+            <h2 id="product-modal-title" class="text-3xl font-bold mb-6 text-gray-900 border-b-2 border-indigo-200 pb-3">Añadir/Editar Producto</h2>
+            <form id="product-form" class="space-y-4">
+                <input type="hidden" id="product-id">
+                <input type="hidden" id="product-type">
+
+                <div>
+                    <label for="product-name" class="block text-sm font-medium text-gray-700">Nombre</label>
+                    <input type="text" id="product-name" required>
+                </div>
+
+                <div id="pizza-fields" class="space-y-4 hidden">
+                    <div>
+                        <label for="product-ingredients-pizza" class="block text-sm font-medium text-gray-700">Ingredientes</label>
+                        <textarea id="product-ingredients-pizza" rows="3"></textarea>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label for="product-price-chica" class="block text-sm font-medium text-gray-700">Precio Chica</label>
+                            <input type="number" id="product-price-chica">
+                        </div>
+                        <div>
+                            <label for="product-price-mediana" class="block text-sm font-medium text-gray-700">Precio Mediana</label>
+                            <input type="number" id="product-price-mediana">
+                        </div>
+                        <div>
+                            <label for="product-price-xl" class="block text-sm font-medium text-gray-700">Precio XL</label>
+                            <input type="number" id="product-price-xl">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="churrasco-fields" class="space-y-4 hidden">
+                     <div>
+                        <label for="product-ingredients-churrasco" class="block text-sm font-medium text-gray-700">Ingredientes</label>
+                        <textarea id="product-ingredients-churrasco" rows="2"></textarea>
+                    </div>
+                    <div>
+                        <label for="product-price-churrasco" class="block text-sm font-medium text-gray-700">Precio</label>
+                        <input type="number" id="product-price-churrasco">
+                    </div>
+                </div>
+
+                <div id="agregado-fields" class="space-y-4 hidden">
+                     <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label for="product-price-individual" class="block text-sm font-medium text-gray-700">Precio Indiv.</label>
+                            <input type="number" id="product-price-individual">
+                        </div>
+                        <div>
+                            <label for="product-price-mediana-agregado" class="block text-sm font-medium text-gray-700">Precio Med.</label>
+                            <input type="number" id="product-price-mediana-agregado">
+                        </div>
+                        <div>
+                            <label for="product-price-xl-agregado" class="block text-sm font-medium text-gray-700">Precio XL</label>
+                            <input type="number" id="product-price-xl-agregado">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="otro-fields" class="space-y-4 hidden">
+                     <div>
+                        <label for="product-category" class="block text-sm font-medium text-gray-700">Categoría</label>
+                        <input type="text" id="product-category">
+                    </div>
+                    <div>
+                        <label for="product-price-otro" class="block text-sm font-medium text-gray-700">Precio</label>
+                        <input type="number" id="product-price-otro">
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-4 pt-4 border-t-2 border-gray-200">
+                    <button type="button" id="product-cancel-button" class="px-6 py-3 bg-gray-200 rounded-xl font-bold hover:bg-gray-300 transition-all">
+                        Cancelar
+                    </button>
+                    <button type="submit" id="product-save-button" class="px-6 py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl font-bold hover:shadow-lg transition-all">
+                        Guardar Producto
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="confirm-delete-product-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center p-4 z-50">
+      <div class="modal-content bg-white p-8 rounded-2xl shadow-2xl w-1/3 max-w-sm border-2 border-red-200">
+        <h2 class="text-xl font-bold mb-4 text-gray-900 border-b-2 border-red-200 pb-3">⚠️ Confirmar Eliminación</h2>
+        <p id="confirm-delete-product-message" class="mb-6 text-gray-700">¿Estás seguro de que deseas eliminar este producto?</p>
+        <div class="flex justify-end gap-4">
+          <button id="delete-product-cancel-btn" class="px-6 py-3 bg-gray-200 rounded-xl font-bold hover:bg-gray-300 transition-all">
+            Cancelar
+          </button>
+          <button id="delete-product-confirm-btn" class="px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-bold hover:shadow-lg transition-all">
+            Eliminar
+          </button>
+        </div>
+      </div>
+    </div>
+
     <script src="./renderer.js"></script>
   </body>
 </html>

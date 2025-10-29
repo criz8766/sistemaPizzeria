@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   // Funciones de productos y pedidos
-  getProducts: () => ipcRenderer.invoke('get-products'),
+  getProducts: () => ipcRenderer.invoke('get-products'), // Usado por CRUD Read y Catálogo
   generateTicket: (orderData) => ipcRenderer.invoke('generate-ticket', orderData),
   confirmPrint: (payload) => ipcRenderer.invoke('confirm-print', payload),
   cancelPrint: (filePath) => ipcRenderer.invoke('cancel-print', filePath),
@@ -13,7 +13,12 @@ contextBridge.exposeInMainWorld('api', {
   updatePaymentStatus: (payload) => ipcRenderer.invoke('update-payment-status', payload),
   updateOrder: (orderData) => ipcRenderer.invoke('update-order', orderData),
   deleteOrder: (orderId) => ipcRenderer.invoke('delete-order', orderId),
-  
+
+  // CRUD: Funciones para gestionar productos
+  addProduct: (payload) => ipcRenderer.invoke('add-product', payload),          // <-- NUEVA FUNCIÓN CRUD Create
+  updateProduct: (payload) => ipcRenderer.invoke('update-product', payload),      // <-- NUEVA FUNCIÓN CRUD Update
+  deleteProduct: (payload) => ipcRenderer.invoke('delete-product', payload),      // <-- NUEVA FUNCIÓN CRUD Delete
+
   // Funciones de configuración
   updatePrices: (updates) => ipcRenderer.invoke('update-prices', updates),
 
@@ -21,8 +26,8 @@ contextBridge.exposeInMainWorld('api', {
   getInventory: () => ipcRenderer.invoke('get-inventory'),
   updateInventory: (updates) => ipcRenderer.invoke('update-inventory', updates),
   onInventoryUpdate: (callback) => ipcRenderer.on('inventory-updated', callback),
-  generateShoppingListPdf: () => ipcRenderer.invoke('generate-shopping-list-pdf'), // <-- NUEVA FUNCIÓN
-  confirmPrintShoppingList: (filePath) => ipcRenderer.invoke('confirm-print-shopping-list', filePath), // <-- NUEVA FUNCIÓN
+  generateShoppingListPdf: () => ipcRenderer.invoke('generate-shopping-list-pdf'),
+  confirmPrintShoppingList: (filePath) => ipcRenderer.invoke('confirm-print-shopping-list', filePath),
 
   // Funciones de la ventana
   minimizeWindow: () => ipcRenderer.send('minimize-window'),

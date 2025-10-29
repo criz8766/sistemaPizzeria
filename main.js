@@ -59,7 +59,7 @@ const getLocalDate = () => {
 
 // --- MANEJADORES IPC ---
 
-// Obtener todos los productos
+// Obtener todos los productos (Existente, usado por CRUD Read y Catálogo)
 ipcMain.handle("get-products", async () => {
   const db = openDb(true);
   const runQuery = (sql) =>
@@ -92,7 +92,115 @@ ipcMain.handle("get-products", async () => {
   }
 });
 
-// Generar PDF del ticket
+// CRUD: Añadir un nuevo producto
+ipcMain.handle("add-product", async (event, { type, productData }) => {
+  const db = openDb();
+  let sql = "";
+  let params = [];
+  const tableName = type; // Asume que 'type' es el nombre de la tabla (pizzas, churrascos, etc.)
+
+  // Validar nombre de tabla para evitar inyección SQL
+  const validTables = ['pizzas', 'churrascos', 'agregados', 'otros_productos'];
+  if (!validTables.includes(tableName)) {
+    console.error(`Intento de añadir producto a tabla inválida: ${tableName}`);
+    return { success: false, message: "Tipo de producto inválido." };
+  }
+
+  // Construir SQL dinámicamente basado en los campos
+  const fields = Object.keys(productData).filter(key => key !== 'id'); // Excluir ID si viene
+  const placeholders = fields.map(() => '?').join(', ');
+  sql = `INSERT INTO ${tableName} (${fields.join(', ')}) VALUES (${placeholders})`;
+  params = fields.map(field => productData[field]);
+
+  console.log(`Ejecutando SQL para añadir producto [${tableName}]: ${sql} con params:`, params);
+
+  return new Promise((resolve) => {
+    db.run(sql, params, function (err) {
+      db.close((closeErr) => { if (closeErr) console.error("Error al cerrar DB en add-product:", closeErr.message); });
+      if (err) {
+        console.error(`Error al añadir producto a ${tableName}:`, err.message);
+        resolve({ success: false, message: err.message });
+      } else {
+        console.log(`Nuevo producto añadido a ${tableName} con ID: ${this.lastID}`);
+        resolve({ success: true, id: this.lastID });
+      }
+    });
+  });
+});
+
+// CRUD: Actualizar un producto existente
+ipcMain.handle("update-product", async (event, { type, productData }) => {
+  const db = openDb();
+  let sql = "";
+  let params = [];
+  const tableName = type;
+
+  // Validar nombre de tabla
+  const validTables = ['pizzas', 'churrascos', 'agregados', 'otros_productos'];
+  if (!validTables.includes(tableName) || !productData.id) {
+    console.error(`Intento de actualizar producto inválido: Tabla=${tableName}, ID=${productData.id}`);
+    return { success: false, message: "Tipo de producto o ID inválido." };
+  }
+
+  // Construir SQL dinámicamente
+  const fields = Object.keys(productData).filter(key => key !== 'id');
+  const setClause = fields.map(field => `${field} = ?`).join(', ');
+  sql = `UPDATE ${tableName} SET ${setClause} WHERE id = ?`;
+  params = fields.map(field => productData[field]);
+  params.push(productData.id); // Añadir el ID al final para el WHERE
+
+  console.log(`Ejecutando SQL para actualizar producto [${tableName}]: ${sql} con params:`, params);
+
+  return new Promise((resolve) => {
+    db.run(sql, params, function (err) {
+      db.close((closeErr) => { if (closeErr) console.error("Error al cerrar DB en update-product:", closeErr.message); });
+      if (err) {
+        console.error(`Error al actualizar producto ${productData.id} en ${tableName}:`, err.message);
+        resolve({ success: false, message: err.message });
+      } else if (this.changes === 0) {
+        console.warn(`Producto ${productData.id} no encontrado en ${tableName} para actualizar.`);
+        resolve({ success: false, message: "Producto no encontrado." });
+      } else {
+        console.log(`Producto ${productData.id} actualizado en ${tableName}.`);
+        resolve({ success: true });
+      }
+    });
+  });
+});
+
+// CRUD: Eliminar un producto
+ipcMain.handle("delete-product", async (event, { type, productId }) => {
+  const db = openDb();
+  const tableName = type;
+
+  // Validar nombre de tabla
+  const validTables = ['pizzas', 'churrascos', 'agregados', 'otros_productos'];
+  if (!validTables.includes(tableName) || !productId) {
+    console.error(`Intento de eliminar producto inválido: Tabla=${tableName}, ID=${productId}`);
+    return { success: false, message: "Tipo de producto o ID inválido." };
+  }
+
+  const sql = `DELETE FROM ${tableName} WHERE id = ?`;
+  console.log(`Ejecutando SQL para eliminar producto [${tableName}]: ${sql} con ID: ${productId}`);
+
+  return new Promise((resolve) => {
+    db.run(sql, [productId], function (err) {
+      db.close((closeErr) => { if (closeErr) console.error("Error al cerrar DB en delete-product:", closeErr.message); });
+      if (err) {
+        console.error(`Error al eliminar producto ${productId} de ${tableName}:`, err.message);
+        resolve({ success: false, message: err.message });
+      } else if (this.changes === 0) {
+        console.warn(`Producto ${productId} no encontrado en ${tableName} para eliminar.`);
+        resolve({ success: false, message: "Producto no encontrado." });
+      } else {
+        console.log(`Producto ${productId} eliminado de ${tableName}.`);
+        resolve({ success: true });
+      }
+    });
+  });
+});
+
+// Generar PDF del ticket (Sin cambios)
 ipcMain.handle("generate-ticket", async (event, orderData) => {
   const ticketWidth = 204; // Ancho típico para impresoras térmicas de 80mm
   const tempFilePath = path.join(os.tmpdir(), `ticket-${Date.now()}.pdf`);
@@ -265,7 +373,7 @@ ipcMain.handle("generate-ticket", async (event, orderData) => {
 });
 
 
-// Confirmar impresión y guardar/actualizar pedido en DB
+// Confirmar impresión y guardar/actualizar pedido en DB (Sin cambios)
 ipcMain.handle("confirm-print", async (event, { filePath, orderData }) => {
   const db = openDb();
   const itemsJson = JSON.stringify(orderData.items);
@@ -339,7 +447,7 @@ ipcMain.handle("confirm-print", async (event, { filePath, orderData }) => {
   }
 });
 
-// Actualizar un pedido existente (sin imprimir)
+// Actualizar un pedido existente (sin imprimir) (Sin cambios)
 ipcMain.handle("update-order", async (event, orderData) => {
   if (!orderData.id) {
       console.error("Error: Se intentó actualizar un pedido sin ID.");
@@ -382,7 +490,7 @@ ipcMain.handle("update-order", async (event, orderData) => {
   });
 });
 
-// Manejador de eliminación y renumeración (Dejado como está, según lo solicitado)
+// Manejador de eliminación y renumeración (Dejado como está, según lo solicitado) (Sin cambios)
 ipcMain.handle('delete-order', async (event, orderId) => {
     const db = openDb();
     const today = getLocalDate(); // Obtiene la fecha actual YYYY-MM-DD
@@ -495,7 +603,7 @@ ipcMain.handle('delete-order', async (event, orderId) => {
 });
 // Fin del manejador delete-order
 
-// Cancelar impresión (borrar archivo temporal)
+// Cancelar impresión (borrar archivo temporal) (Sin cambios)
 ipcMain.handle("cancel-print", (event, filePath) => {
   try {
     if (fs.existsSync(filePath)) {
@@ -507,7 +615,7 @@ ipcMain.handle("cancel-print", (event, filePath) => {
   }
 });
 
-// Generar reporte diario en Excel
+// Generar reporte diario en Excel (Sin cambios)
 async function generateDailyReport(autoSavePath = null) {
   const db = openDb(true);
   const today = getLocalDate();
@@ -614,7 +722,7 @@ async function generateDailyReport(autoSavePath = null) {
 
 ipcMain.handle("generate-report", () => generateDailyReport());
 
-// Guardar reporte localmente y enviarlo por correo (usado al cerrar)
+// Guardar reporte localmente y enviarlo por correo (usado al cerrar) (Sin cambios)
 async function saveAndSendReport() {
   const today = getLocalDate();
   const desktopPath = app.getPath("desktop"); // Guardar en Escritorio
@@ -716,7 +824,7 @@ async function saveAndSendReport() {
   }
 }
 
-// Función para limpiar la tabla de pedidos del día (Se llama al cerrar la app)
+// Función para limpiar la tabla de pedidos del día (Se llama al cerrar la app) (Sin cambios)
 async function clearOrdersTable() {
     console.log('Limpiando y reseteando la tabla de pedidos...');
     const db = openDb();
@@ -737,7 +845,7 @@ async function clearOrdersTable() {
 }
 
 
-// ⭐️ MANEJADOR FALTANTE RESTAURADO
+// Obtener pedidos de hoy (Sin cambios)
 ipcMain.handle("get-todays-orders", async () => {
   const db = openDb(true);
   const today = getLocalDate();
@@ -760,7 +868,7 @@ ipcMain.handle("get-todays-orders", async () => {
   }
 });
 
-// Actualizar estado de entrega
+// Actualizar estado de entrega (Sin cambios)
 ipcMain.handle("update-order-status", async (event, { orderId, status }) => {
   const db = openDb();
   const sql = `UPDATE pedidos SET estado = ? WHERE id = ?`;
@@ -777,7 +885,7 @@ ipcMain.handle("update-order-status", async (event, { orderId, status }) => {
   });
 });
 
-// Actualizar estado de pago
+// Actualizar estado de pago (Sin cambios)
 ipcMain.handle("update-payment-status", async (event, { orderId, status, paymentMethod }) => {
   const db = openDb();
   const sql = `UPDATE pedidos SET estado_pago = ?, forma_pago = ? WHERE id = ?`;
@@ -794,7 +902,7 @@ ipcMain.handle("update-payment-status", async (event, { orderId, status, payment
   });
 });
 
-// Actualizar precios de productos
+// Actualizar precios de productos (Sin cambios)
 ipcMain.handle("update-prices", async (event, updates) => {
   const db = openDb();
   return new Promise((resolve) => {
@@ -837,7 +945,7 @@ ipcMain.handle("update-prices", async (event, updates) => {
 });
 
 
-// --- INVENTARIO ---
+// --- INVENTARIO --- (Sin cambios)
 
 // Obtener inventario
 ipcMain.handle("get-inventory", async () => {
@@ -947,7 +1055,7 @@ ipcMain.handle("confirm-print-shopping-list", async (event, filePath) => {
   }
 });
 
-// --- API SERVER para Inventario Remoto ---
+// --- API SERVER para Inventario Remoto --- (Sin cambios)
 function startApiServer() {
   const api = express();
   api.use(cors());
@@ -1014,7 +1122,7 @@ function startApiServer() {
   });
 }
 
-// --- CREACIÓN DE LA VENTANA PRINCIPAL ---
+// --- CREACIÓN DE LA VENTANA PRINCIPAL --- (Sin cambios)
 const createWindow = () => {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -1041,12 +1149,12 @@ const createWindow = () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
              dialog.showMessageBox(mainWindow, { type: 'info', title: 'Cerrando', message: 'Generando reporte final y limpiando historial...', buttons: [] });
         }
-        
+
         await saveAndSendReport(); // Espera: Guarda y envía el reporte (Reporte)
         await clearOrdersTable(); // ⭐️ Espera: Borra el historial (Tu Requisito principal)
 
         console.log("Proceso de reporte/limpieza finalizado. Destruyendo ventana.");
-        
+
         // ⭐️ Destruimos la ventana para permitir que el evento 'window-all-closed' se dispare.
          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
     } catch (error) {
@@ -1061,12 +1169,12 @@ const createWindow = () => {
   mainWindow.on('closed', () => mainWindow = null );
 };
 
-// --- MANEJADORES DE BOTONES DE BARRA DE TÍTULO ---
+// --- MANEJADORES DE BOTONES DE BARRA DE TÍTULO --- (Sin cambios)
 ipcMain.on("minimize-window", () => { const w = BrowserWindow.getFocusedWindow(); if (w) w.minimize(); });
 ipcMain.on("maximize-window", () => { const w = BrowserWindow.getFocusedWindow(); if (w) { if (w.isMaximized()) w.unmaximize(); else w.maximize(); } });
 ipcMain.on("close-window", () => { const w = BrowserWindow.getFocusedWindow(); if (w) w.close(); }); // Esto disparará el evento 'close' de la ventana
 
-// --- EVENTOS DEL CICLO DE VIDA DE LA APP ---
+// --- EVENTOS DEL CICLO DE VIDA DE LA APP --- (Sin cambios)
 app.whenReady().then(() => {
   createWindow();
   startApiServer();
@@ -1076,7 +1184,7 @@ app.whenReady().then(() => {
 app.on("will-quit", async (event) => {
     // Este evento se usa para asegurar que Bonjour se detenga y la app salga.
     // La limpieza principal se maneja en el 'close' de la ventana.
-    
+
     // Detener Bonjour
     if (bonjour) {
         console.log("Deteniendo Bonjour...");
@@ -1100,7 +1208,7 @@ app.on("window-all-closed", () => {
   }
 });
 
-// --- Manejo de errores no capturados ---
+// --- Manejo de errores no capturados --- (Sin cambios)
 process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
     if (mainWindow && !mainWindow.isDestroyed()) dialog.showErrorBox('Error Crítico', `Error: ${error.message}`);
