@@ -227,6 +227,44 @@
         border-right: 1px solid rgba(226, 232, 240, 0.8);
       }
 
+      /* Mejoras de responsividad */
+      @media (max-width: 768px) {
+        .flex.h-screen.pt-11 {
+          flex-direction: column;
+        }
+        aside {
+          width: 100% !important;
+          max-height: 40vh;
+        }
+        main {
+          height: 60vh;
+        }
+        #title-bar {
+          padding: 0 1rem;
+        }
+        .sub-tab-button {
+          padding: 0.5rem 1rem;
+          font-size: 0.875rem;
+        }
+      }
+
+      /* Prevención de colapso */
+      .product-card {
+        min-width: 0;
+        word-wrap: break-word;
+      }
+      
+      /* Mejora de espaciado en elementos flexibles */
+      .flex {
+        gap: 0.5rem;
+      }
+      
+      /* Mejora de scroll en contenedores */
+      .overflow-y-auto {
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+      }
+
       /* Animación de carga */
       @keyframes pulse {
         0%, 100% {
@@ -291,7 +329,7 @@
     </div>
 
     <div class="flex h-screen pt-11">
-      <aside class="w-1/3 max-w-md sidebar-glass p-6 shadow-2xl flex flex-col">
+      <aside class="w-[400px] min-w-[350px] sidebar-glass p-6 shadow-2xl flex flex-col">
         <div class="flex items-center gap-3 mb-6 pb-4 border-b-2 border-orange-200">
           <div class="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
@@ -389,7 +427,7 @@
         </div>
       </aside>
 
-      <main class="w-2/3 flex-1 flex flex-col overflow-hidden">
+      <main class="flex-1 flex flex-col overflow-hidden min-w-0">
         <div class="px-6 pt-6 bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 z-10">
           <div class="flex border-b-2 border-gray-200 bg-white rounded-t-xl shadow-sm">
             <button class="tab-button active py-3 px-6 font-semibold border-b-4" data-target="catalog-tab-content">
@@ -423,15 +461,50 @@
               </div>
               <div class="relative w-1/3">
                  <label for="search-products" class="sr-only">Buscar Producto</label>
-                 <input type="text" id="search-products" class="w-full pl-11 text-sm" placeholder="Buscar producto...">
-                <svg class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                 <input type="text" id="search-products" class="w-full px-3 text-sm" placeholder="Buscar producto...">
               </div>
             </div>
 
-            <div id="catalog-content">
-              <div id="pizzas-tab" class="sub-tab-content grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
-              <div id="churrascos-tab" class="sub-tab-content hidden grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
-              <div id="otros-tab" class="sub-tab-content hidden"></div>
+              <div id="catalog-content" class="pb-6">
+              <div id="pizzas-tab" class="sub-tab-content grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
+              <div id="churrascos-tab" class="sub-tab-content hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
+              <div id="otros-tab" class="sub-tab-content hidden">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  <div class="bg-white rounded-xl shadow-sm border-2 border-gray-100 hover:border-orange-400 transition-all overflow-hidden">
+                    <div class="p-4">
+                      <h3 class="text-lg font-bold mb-4 text-gray-800">Bebidas y Otros</h3>
+                      <div class="space-y-2">
+                        <button class="w-full py-2 px-4 rounded-lg bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 border border-orange-200 text-gray-700 transition-all text-left">
+                          🥤 Bebidas
+                        </button>
+                        <button class="w-full py-2 px-4 rounded-lg bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 border border-orange-200 text-gray-700 transition-all text-left">
+                          🍨 Postres
+                        </button>
+                        <button class="w-full py-2 px-4 rounded-lg bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 border border-orange-200 text-gray-700 transition-all text-left">
+                          🥗 Ensaladas
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="bg-white rounded-xl shadow-sm border-2 border-gray-100 hover:border-orange-400 transition-all overflow-hidden">
+                    <div class="p-4">
+                      <h3 class="text-lg font-bold mb-4 text-gray-800">Complementos</h3>
+                      <div class="space-y-2">
+                        <button class="w-full py-2 px-4 rounded-lg bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 border border-orange-200 text-gray-700 transition-all text-left">
+                          🍟 Papas Fritas
+                        </button>
+                        <button class="w-full py-2 px-4 rounded-lg bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 border border-orange-200 text-gray-700 transition-all text-left">
+                          🥖 Pan de Ajo
+                        </button>
+                        <button class="w-full py-2 px-4 rounded-lg bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 border border-orange-200 text-gray-700 transition-all text-left">
+                          🧀 Palitos de Queso
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -482,48 +555,62 @@
     </div>
 
      <div id="pizza-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center p-4 z-50">
-      <div class="modal-content bg-white p-8 rounded-2xl shadow-2xl w-1/2 max-w-2xl border-2 border-orange-200">
-        <h2 id="modal-pizza-name" class="text-3xl font-bold mb-6 text-gray-900 border-b-2 border-orange-200 pb-3"></h2>
-        <div class="mb-6">
-          <h3 class="font-bold text-lg mb-3 text-gray-700">Tamaño</h3>
-          <div id="size-options" class="flex gap-3">
-            <button class="size-button border rounded-xl px-6 py-3 font-semibold" data-size="chica">Chica</button>
-            <button class="size-button border rounded-xl px-6 py-3 font-semibold" data-size="mediana">Mediana</button>
-            <button class="size-button border rounded-xl px-6 py-3 font-semibold" data-size="xl">XL</button>
+      <div class="modal-content bg-white p-6 rounded-lg w-11/12 sm:w-[480px] max-w-lg border border-gray-200 max-h-[90vh] overflow-y-auto">
+        <h2 id="modal-pizza-name" class="text-xl font-bold mb-6 text-gray-800"></h2>
+        
+        <div class="space-y-5">
+          <!-- Tamaños -->
+          <div>
+            <h3 class="text-sm font-medium text-gray-600 mb-3">Tamaño</h3>
+            <div id="size-options" class="flex gap-2">
+              <button class="size-button flex-1 py-2 px-4 rounded-lg border border-gray-200 font-medium text-gray-700 hover:bg-orange-50 hover:border-orange-200 transition-all" data-size="chica">Chica</button>
+              <button class="size-button flex-1 py-2 px-4 rounded-lg border border-gray-200 font-medium text-gray-700 hover:bg-orange-50 hover:border-orange-200 transition-all" data-size="mediana">Mediana</button>
+              <button class="size-button flex-1 py-2 px-4 rounded-lg border border-gray-200 font-medium text-gray-700 hover:bg-orange-50 hover:border-orange-200 transition-all" data-size="xl">XL</button>
+            </div>
+          </div>
+
+          <!-- Mitad y Mitad -->
+          <div id="half-and-half-section" class="hidden">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="half-and-half-checkbox" class="w-4 h-4 text-orange-500 rounded border-gray-300">
+              <span class="text-sm font-medium text-gray-700">Mitad y Mitad</span>
+            </label>
+            <div id="half-options" class="hidden mt-3 space-y-2">
+              <select id="half-1" class="w-full p-2 rounded-lg border border-gray-200 text-sm"></select>
+              <select id="half-2" class="w-full p-2 rounded-lg border border-gray-200 text-sm"></select>
+            </div>
+          </div>
+
+          <!-- Agregados -->
+          <div>
+            <h3 class="text-sm font-medium text-gray-600 mb-3">Agregados</h3>
+            <input type="text" 
+                   id="search-extras" 
+                   class="w-full p-2 mb-2 text-sm rounded-lg border border-gray-200"
+                   placeholder="Buscar agregados">
+            <div id="extras-container" class="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto"></div>
+          </div>
+
+          <!-- Notas -->
+          <div>
+            <h3 class="text-sm font-medium text-gray-600 mb-2">Notas</h3>
+            <textarea 
+              id="pizza-notes" 
+              rows="2" 
+              class="w-full p-2 text-sm rounded-lg border border-gray-200 resize-none"
+              placeholder="Instrucciones especiales..."></textarea>
           </div>
         </div>
-        <div id="half-and-half-section" class="hidden mb-6 p-4 bg-orange-50 rounded-xl border-2 border-orange-200">
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" id="half-and-half-checkbox" class="w-5 h-5 text-orange-500 focus:ring-orange-500">
-            <span class="font-bold text-gray-700">🍕 Pedir Mitad y Mitad</span>
-          </label>
-          <div id="half-options" class="hidden mt-3 grid grid-cols-2 gap-4">
-            <select id="half-1"></select>
-            <select id="half-2"></select>
-          </div>
-        </div>
-        <div class="mb-6">
-          <h3 class="font-bold text-lg mb-3 text-gray-700">Agregados</h3>
-          <div class="relative mb-3">
-            <label for="search-extras" class="sr-only">Buscar Agregado</label>
-            <input type="text" id="search-extras" class="w-full pl-10 text-sm" placeholder="Buscar agregado...">
-            <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-          </div>
-          <div id="extras-container" class="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto p-3 border rounded-xl bg-gray-50"></div>
-        </div>
-        <div class="mb-6">
-          <h3 class="font-bold text-lg mb-3 text-gray-700">Notas Adicionales</h3>
-          <label for="pizza-notes" class="sr-only">Notas para la pizza</label>
-          <textarea id="pizza-notes" rows="3" placeholder="Ej: Sin cebolla, masa bien cocida..."></textarea>
-        </div>
-        <div class="flex justify-between items-center pt-4 border-t-2 border-gray-200">
-          <span id="modal-pizza-price" class="text-3xl font-bold text-orange-600"></span>
-          <div class="flex gap-3">
-            <button id="cancel-button" class="px-6 py-3 bg-gray-200 rounded-xl font-bold hover:bg-gray-300 transition-all">
+
+        <!-- Footer -->
+        <div class="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
+          <span id="modal-pizza-price" class="text-xl font-bold text-gray-800"></span>
+          <div class="flex gap-2">
+            <button id="cancel-button" class="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-all">
               Cancelar
             </button>
-            <button id="add-to-order-button" class="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-bold hover:shadow-lg transition-all">
-              Añadir al Pedido
+            <button id="add-to-order-button" class="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-all">
+              Agregar
             </button>
           </div>
         </div>
@@ -667,63 +754,152 @@
                     <input type="text" id="product-name" required>
                 </div>
 
-                <div id="pizza-fields" class="space-y-4 hidden">
-                    <div>
-                        <label for="product-ingredients-pizza" class="block text-sm font-medium text-gray-700">Ingredientes</label>
-                        <textarea id="product-ingredients-pizza" rows="3"></textarea>
+                <div id="pizza-fields" class="space-y-6 hidden">
+                    <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <label for="product-ingredients-pizza" class="block text-sm font-semibold text-gray-700 mb-2">
+                            Ingredientes de la Pizza
+                        </label>
+                        <textarea 
+                            id="product-ingredients-pizza" 
+                            rows="3"
+                            class="w-full px-4 py-3 rounded-lg border-gray-300 focus:border-orange-500 focus:ring focus:ring-orange-200 transition-all resize-none shadow-sm"
+                            placeholder="Ingresa los ingredientes separados por coma..."></textarea>
                     </div>
-                    <div class="grid grid-cols-3 gap-4">
-                        <div>
-                            <label for="product-price-chica" class="block text-sm font-medium text-gray-700">Precio Chica</label>
-                            <input type="number" id="product-price-chica">
-                        </div>
-                        <div>
-                            <label for="product-price-mediana" class="block text-sm font-medium text-gray-700">Precio Mediana</label>
-                            <input type="number" id="product-price-mediana">
-                        </div>
-                        <div>
-                            <label for="product-price-xl" class="block text-sm font-medium text-gray-700">Precio XL</label>
-                            <input type="number" id="product-price-xl">
+                    
+                    <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-4">Precios por Tamaño</h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div class="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                                <label for="product-price-chica" class="block text-sm font-medium text-gray-600 mb-1.5">
+                                    Pizza Chica
+                                </label>
+                                <div class="relative">
+                                    <input 
+                                        type="number" 
+                                        id="product-price-chica"
+                                        class="w-full px-3 py-2 rounded-lg border-gray-300 focus:border-orange-500 focus:ring focus:ring-orange-200 transition-all"
+                                        placeholder="0">
+                                </div>
+                            </div>
+                            <div class="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                                <label for="product-price-mediana" class="block text-sm font-medium text-gray-600 mb-1.5">
+                                    Pizza Mediana
+                                </label>
+                                <div class="relative">
+                                    <input 
+                                        type="number" 
+                                        id="product-price-mediana"
+                                        class="w-full px-3 py-2 rounded-lg border-gray-300 focus:border-orange-500 focus:ring focus:ring-orange-200 transition-all"
+                                        placeholder="0">
+                                </div>
+                            </div>
+                            <div class="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                                <label for="product-price-xl" class="block text-sm font-medium text-gray-600 mb-1.5">
+                                    Pizza XL
+                                </label>
+                                <div class="relative">
+                                    <input 
+                                        type="number" 
+                                        id="product-price-xl"
+                                        class="w-full px-3 py-2 rounded-lg border-gray-300 focus:border-orange-500 focus:ring focus:ring-orange-200 transition-all"
+                                        placeholder="0">
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div id="churrasco-fields" class="space-y-4 hidden">
-                     <div>
-                        <label for="product-ingredients-churrasco" class="block text-sm font-medium text-gray-700">Ingredientes</label>
-                        <textarea id="product-ingredients-churrasco" rows="2"></textarea>
+                <div id="churrasco-fields" class="space-y-6 hidden">
+                    <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <label for="product-ingredients-churrasco" class="block text-sm font-semibold text-gray-700 mb-2">
+                            Ingredientes del Churrasco
+                        </label>
+                        <textarea 
+                            id="product-ingredients-churrasco" 
+                            rows="2"
+                            class="w-full px-4 py-3 rounded-lg border-gray-300 focus:border-orange-500 focus:ring focus:ring-orange-200 transition-all resize-none shadow-sm"
+                            placeholder="Ingresa los ingredientes separados por coma..."></textarea>
                     </div>
-                    <div>
-                        <label for="product-price-churrasco" class="block text-sm font-medium text-gray-700">Precio</label>
-                        <input type="number" id="product-price-churrasco">
-                    </div>
-                </div>
-
-                <div id="agregado-fields" class="space-y-4 hidden">
-                     <div class="grid grid-cols-3 gap-4">
-                        <div>
-                            <label for="product-price-individual" class="block text-sm font-medium text-gray-700">Precio Indiv.</label>
-                            <input type="number" id="product-price-individual">
-                        </div>
-                        <div>
-                            <label for="product-price-mediana-agregado" class="block text-sm font-medium text-gray-700">Precio Med.</label>
-                            <input type="number" id="product-price-mediana-agregado">
-                        </div>
-                        <div>
-                            <label for="product-price-xl-agregado" class="block text-sm font-medium text-gray-700">Precio XL</label>
-                            <input type="number" id="product-price-xl-agregado">
+                    <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-4">Precio del Churrasco</h4>
+                        <div class="bg-white p-3 rounded-lg border border-gray-100 shadow-sm max-w-md">
+                            <div class="relative">
+                                <input 
+                                    type="number" 
+                                    id="product-price-churrasco"
+                                    class="w-full px-3 py-2 rounded-lg border-gray-300 focus:border-orange-500 focus:ring focus:ring-orange-200 transition-all"
+                                    placeholder="0">
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div id="otro-fields" class="space-y-4 hidden">
-                     <div>
-                        <label for="product-category" class="block text-sm font-medium text-gray-700">Categoría</label>
-                        <input type="text" id="product-category">
+                <div id="agregado-fields" class="space-y-6 hidden">
+                    <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-4">Precios por Tamaño del Agregado</h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div class="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                                <label for="product-price-individual" class="block text-sm font-medium text-gray-600 mb-1.5">
+                                    Individual
+                                </label>
+                                <div class="relative">
+                                    <input 
+                                        type="number" 
+                                        id="product-price-individual"
+                                        class="w-full px-3 py-2 rounded-lg border-gray-300 focus:border-orange-500 focus:ring focus:ring-orange-200 transition-all"
+                                        placeholder="0">
+                                </div>
+                            </div>
+                            <div class="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                                <label for="product-price-mediana-agregado" class="block text-sm font-medium text-gray-600 mb-1.5">
+                                    Mediana
+                                </label>
+                                <div class="relative">
+                                    <input 
+                                        type="number" 
+                                        id="product-price-mediana-agregado"
+                                        class="w-full px-3 py-2 rounded-lg border-gray-300 focus:border-orange-500 focus:ring focus:ring-orange-200 transition-all"
+                                        placeholder="0">
+                                </div>
+                            </div>
+                            <div class="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                                <label for="product-price-xl-agregado" class="block text-sm font-medium text-gray-600 mb-1.5">
+                                    XL
+                                </label>
+                                <div class="relative">
+                                    <input 
+                                        type="number" 
+                                        id="product-price-xl-agregado"
+                                        class="w-full px-3 py-2 rounded-lg border-gray-300 focus:border-orange-500 focus:ring focus:ring-orange-200 transition-all"
+                                        placeholder="0">
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <label for="product-price-otro" class="block text-sm font-medium text-gray-700">Precio</label>
-                        <input type="number" id="product-price-otro">
+                </div>
+
+                <div id="otro-fields" class="space-y-6 hidden">
+                    <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <label for="product-category" class="block text-sm font-semibold text-gray-700 mb-2">
+                            Categoría del Producto
+                        </label>
+                        <input 
+                            type="text" 
+                            id="product-category"
+                            class="w-full px-4 py-3 rounded-lg border-gray-300 focus:border-orange-500 focus:ring focus:ring-orange-200 transition-all shadow-sm"
+                            placeholder="Ej: Bebidas, Postres, etc.">
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-4">Precio del Producto</h4>
+                        <div class="bg-white p-3 rounded-lg border border-gray-100 shadow-sm max-w-md">
+                            <div class="relative">
+                                <input 
+                                    type="number" 
+                                    id="product-price-otro"
+                                    class="w-full px-3 py-2 rounded-lg border-gray-300 focus:border-orange-500 focus:ring focus:ring-orange-200 transition-all"
+                                    placeholder="0">
+                            </div>
+                        </div>
                     </div>
                 </div>
 
