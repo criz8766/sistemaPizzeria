@@ -43,7 +43,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon (1).ico"
     },
     "nsis": {
       "oneClick": false,

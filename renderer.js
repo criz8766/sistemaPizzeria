@@ -216,7 +216,7 @@ function updateOrderSummary() {
         </div>
         <div class="text-xs text-gray-500">
           ${item.extras && item.extras.length > 0 ? `+ ${item.extras.map(e => e.nombre).join(', ')}` : ''}
-          ${item.notes ? `Nota: ${item.notes}` : ''}
+          ${item.notes ? `<br>Nota: ${item.notes}` : ''}
         </div>
         <button class="text-red-500 text-xs hover:underline remove-item-btn" data-id="${item.orderId}">Quitar</button>
       `;
@@ -395,23 +395,36 @@ async function populateInventory() {
         for (const categoria in grouped) {
             const section = document.createElement('div');
             section.innerHTML = `<h3 class="text-xl font-bold text-gray-800 mb-3">${categoria}</h3>`;
-            const grid = document.createElement('div');
-            grid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4';
-            grouped[categoria].forEach(item => {
-                const itemEl = document.createElement('div');
-                itemEl.className = 'bg-white p-3 rounded-lg shadow-sm flex items-center justify-between gap-2';
-                const checked = item.comprar === 1 ? 'checked' : '';
-                itemEl.innerHTML = `
-                    <label class="font-semibold text-sm flex-grow">${item.nombre}</label>
-                    <input type="text" class="inventory-input w-24 p-1 border rounded text-right" data-id="${item.id}" value="${item.cantidad}">
-                    <label class="flex items-center gap-1 cursor-pointer text-sm text-gray-600">
-                        <input type="checkbox" class="buy-checkbox h-5 w-5 focus:ring-blue-500" data-id="${item.id}" ${checked}>
-                        Comprar
-                    </label>
-                `;
-                grid.appendChild(itemEl);
-            });
-            section.appendChild(grid);
+            const tableWrapper = document.createElement('div');
+            tableWrapper.className = 'overflow-x-auto bg-white rounded-lg shadow border border-gray-200 mb-6';
+            tableWrapper.innerHTML = `
+                <table class="min-w-full">
+                    <thead>
+                        <tr class="bg-gray-50">
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
+                            <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Cantidad restante</th>
+                            <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Comprar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${grouped[categoria].map(item => `
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-2 text-sm text-gray-900 font-medium">${item.nombre}</td>
+                                <td class="px-4 py-2">
+                                    <input type="text" class="inventory-input w-24 p-1 border rounded text-right mx-auto block" data-id="${item.id}" value="${item.cantidad}">
+                                </td>
+                                <td class="px-4 py-2">
+                                    <label class="flex items-center justify-center gap-1 cursor-pointer">
+                                        <input type="checkbox" class="buy-checkbox h-5 w-5 focus:ring-blue-500" data-id="${item.id}" ${item.comprar === 1 ? 'checked' : ''}>
+                                        <span class="text-sm text-gray-600">Comprar</span>
+                                    </label>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            section.appendChild(tableWrapper);
             inventoryContainer.appendChild(section);
         }
     } catch (error) {
