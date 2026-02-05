@@ -557,7 +557,6 @@
         <h2 id="modal-pizza-name" class="text-xl font-bold mb-6 text-gray-800"></h2>
         
         <div class="space-y-5">
-          <!-- Tamaños -->
           <div>
             <h3 class="text-sm font-medium text-gray-600 mb-3">Tamaño</h3>
             <div id="size-options" class="flex gap-2">
@@ -567,7 +566,6 @@
             </div>
           </div>
 
-          <!-- Mitad y Mitad -->
           <div id="half-and-half-section" class="hidden">
             <label class="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" id="half-and-half-checkbox" class="w-4 h-4 text-orange-500 rounded border-gray-300">
@@ -579,7 +577,6 @@
             </div>
           </div>
 
-          <!-- Agregados -->
           <div>
             <h3 class="text-sm font-medium text-gray-600 mb-3">Agregados</h3>
             <input type="text" 
@@ -589,7 +586,6 @@
             <div id="extras-container" class="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto"></div>
           </div>
 
-          <!-- Notas -->
           <div>
             <h3 class="text-sm font-medium text-gray-600 mb-2">Notas</h3>
             <textarea 
@@ -600,7 +596,6 @@
           </div>
         </div>
 
-        <!-- Footer -->
         <div class="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
           <span id="modal-pizza-price" class="text-xl font-bold text-gray-800"></span>
           <div class="flex gap-2">
@@ -911,6 +906,24 @@
                 </div>
             </form>
         </div>
+    </div>
+
+    <div id="cancel-order-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center p-4 z-50">
+      <div class="modal-content bg-white p-6 rounded-2xl shadow-2xl w-1/3 max-w-md border-2 border-red-200">
+        <h2 class="text-2xl font-bold mb-4 text-gray-900 border-b-2 border-red-200 pb-3">🚫 Anular Pedido</h2>
+        <p class="mb-4 text-gray-600">Por favor, indica el motivo de la anulación para el registro:</p>
+        
+        <textarea id="cancel-reason" rows="3" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-red-400 mb-4" placeholder="Ej: Cliente se retiró, error de digitación..."></textarea>
+        
+        <div class="flex justify-end gap-4">
+          <button id="cancel-anulacion-btn" class="px-4 py-2 bg-gray-200 rounded-lg font-bold hover:bg-gray-300 transition-all">
+            Volver
+          </button>
+          <button id="confirm-anulacion-btn" class="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-bold hover:shadow-lg transition-all">
+            Confirmar Anulación
+          </button>
+        </div>
+      </div>
     </div>
 
     <div id="confirm-delete-product-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center p-4 z-50">

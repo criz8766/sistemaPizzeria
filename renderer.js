@@ -4,15 +4,24 @@ let currentOrder = [];
 let fullOrder = {};
 let tempPdfPath = '';
 let currentPizzaConfig = {};
-let currentNoteItem = {};
-let editingOrderId = null;
+let currentNoteItem = {}; // Para productos simples que usan el modal de notas
+let editingOrderId = null; // Para editar un pedido HISTÓRICO (ya guardado)
 let payingOrderId = null;
-let orderToDeleteId = null;
-let shoppingListPdfPath = ''; // Para guardar la ruta del PDF de la lista de compras
+let shoppingListPdfPath = ''; 
 
-// CRUD: Nuevas variables globales para el manejo de productos
+// --- VARIABLES PARA EDICIÓN DE ÍTEMS EN EL CARRITO (NUEVO) ---
+let cartItemToEditId = null; // ID temporal del ítem dentro del carrito actual que se está editando
+
+// Variables para anulación de pedidos
+let orderToCancelId = null;
+const cancelOrderModal = document.getElementById('cancel-order-modal');
+const cancelReasonInput = document.getElementById('cancel-reason');
+const cancelAnulacionBtn = document.getElementById('cancel-anulacion-btn');
+const confirmAnulacionBtn = document.getElementById('confirm-anulacion-btn');
+
+// CRUD: Variables globales para gestión de productos
 let editingProductId = null;
-let productToDelete = null; // Guardará { type, id }
+let productToDelete = null; 
 const productModal = document.getElementById('product-modal');
 const productForm = document.getElementById('product-form');
 const productModalTitle = document.getElementById('product-modal-title');
@@ -27,12 +36,11 @@ const pizzaModal = document.getElementById('pizza-modal');
 const previewModal = document.getElementById('preview-modal');
 const notesModal = document.getElementById('notes-modal');
 const confirmPaymentModal = document.getElementById('confirm-payment-modal');
-const confirmDeleteModal = document.getElementById('confirm-delete-modal'); // Para pedidos
 const orderSummaryEl = document.getElementById('order-summary');
 const totalPriceEl = document.getElementById('total-price');
-const pizzasContainer = document.getElementById('pizzas-tab'); // Del catálogo
-const churrascosContainer = document.getElementById('churrascos-tab'); // Del catálogo
-const otrosContainer = document.getElementById('otros-tab'); // Del catálogo
+const pizzasContainer = document.getElementById('pizzas-tab'); 
+const churrascosContainer = document.getElementById('churrascos-tab'); 
+const otrosContainer = document.getElementById('otros-tab'); 
 const addToOrderBtn = document.getElementById('add-to-order-button');
 const hnhCheckbox = document.getElementById('half-and-half-checkbox');
 const hnhOptions = document.getElementById('half-options');
@@ -43,9 +51,6 @@ const updateOrderBtn = document.getElementById('update-order-btn');
 const reportBtn = document.getElementById('report-btn');
 const historyListEl = document.getElementById('history-list');
 const historyTabBtn = document.querySelector('.tab-button[data-target="history-tab-content"]');
-// Eliminado: Referencia a settingsTabBtn
-// const priceSettingsContainer = document.getElementById('price-settings-container'); // Eliminado
-// const savePricesBtn = document.getElementById('save-prices-btn'); // Eliminado
 const paymentMethodWrapper = document.getElementById('payment-method-wrapper');
 const paymentMethodSelect = document.getElementById('payment-method');
 const otherPaymentWrapper = document.getElementById('other-payment-wrapper');
@@ -86,32 +91,31 @@ function showPrintPreview(filePath, isShoppingList = false) {
         document.getElementById('preview-cancel-btn').dataset.type = 'ticket';
     }
     const pdfPreview = document.getElementById('pdf-preview');
-    pdfPreview.src = `${filePath}?t=${new Date().getTime()}`; // Añade timestamp para evitar caché
+    pdfPreview.src = `${filePath}?t=${new Date().getTime()}`; 
     previewModal.classList.remove('hidden');
 }
 
 function resetOrderState() {
     currentOrder = [];
     editingOrderId = null;
+    cartItemToEditId = null; // Resetear edición de ítem
     document.getElementById('customer-name').value = '';
     document.getElementById('customer-phone').value = '';
-    document.getElementById('delivery-delay').checked = true; // Volver a demora por defecto
-    document.getElementById('delay-minutes').value = '25'; // Resetear minutos demora
-    document.getElementById('scheduled-time').value = ''; // Limpiar hora agendada
-    document.getElementById('delivery-delay-input').classList.remove('hidden'); // Mostrar input demora
-    document.getElementById('delivery-scheduled-input').classList.add('hidden'); // Ocultar input agendado
-    document.getElementById('status-unpaid').checked = true; // Volver a por pagar
-    paymentMethodWrapper.classList.add('hidden'); // Ocultar opciones de pago
-    paymentMethodSelect.value = 'Efectivo'; // Resetear select
-    otherPaymentWrapper.classList.add('hidden'); // Ocultar input 'otra'
-    document.getElementById('other-payment-method').value = ''; // Limpiar input 'otra'
+    document.getElementById('delivery-delay').checked = true; 
+    document.getElementById('delay-minutes').value = '25'; 
+    document.getElementById('scheduled-time').value = ''; 
+    document.getElementById('delivery-delay-input').classList.remove('hidden'); 
+    document.getElementById('delivery-scheduled-input').classList.add('hidden'); 
+    document.getElementById('status-unpaid').checked = true; 
+    paymentMethodWrapper.classList.add('hidden'); 
+    paymentMethodSelect.value = 'Efectivo'; 
+    otherPaymentWrapper.classList.add('hidden'); 
+    document.getElementById('other-payment-method').value = ''; 
     updateOrderBtn.classList.add('hidden');
     finalizeOrderBtn.classList.remove('hidden');
     updateOrderSummary();
-     // CRUD: Habilitar pestañas al resetear pedido
     enableTabs();
 }
-
 
 // CRUD: Función para habilitar todas las pestañas principales
 function enableTabs() {
@@ -152,33 +156,69 @@ async function loadOrderHistory() {
                 console.error(`Error parseando items del pedido ${order.id}:`, e);
                 items = [{ name: 'Error al leer items', notes: '' }];
             }
+            
             const isDelivered = order.estado === 'Entregado';
             const isPaid = order.estado_pago === 'Pagado';
+            const isAnulado = order.anulado === 1; 
+
+            let cardClasses = "border rounded-lg shadow-sm p-4 transition-all ";
+            let statusText = "";
+            let statusColorClass = "";
+
+            if (isAnulado) {
+                cardClasses += "bg-gray-100 border-gray-300 opacity-75 grayscale relative overflow-hidden";
+                statusText = "ANULADO";
+                statusColorClass = "text-red-600 font-extrabold";
+            } else if (isDelivered) {
+                cardClasses += "bg-green-50 border-green-200";
+                statusText = order.estado;
+                statusColorClass = "text-green-600";
+            } else {
+                cardClasses += "bg-white border-gray-200";
+                statusText = order.estado;
+                statusColorClass = "text-blue-600";
+            }
+
             const orderCard = document.createElement('div');
-            orderCard.className = `border rounded-lg shadow-sm p-4 ${isDelivered ? 'bg-green-50' : 'bg-white'}`;
+            orderCard.className = cardClasses;
+
+            let buttonsHtml = '';
+            if (isAnulado) {
+                buttonsHtml = `
+                    <div class="mt-2 text-right border-t pt-2 border-gray-300">
+                        <p class="text-sm text-red-600 font-bold italic">🚫 PEDIDO ANULADO</p>
+                        <p class="text-xs text-gray-600">Motivo: ${order.motivo_anulacion || 'No especificado'}</p>
+                    </div>
+                `;
+            } else {
+                buttonsHtml = `
+                    <div class="text-right mt-3 space-x-2">
+                        <button class="bg-red-600 text-white text-xs px-3 py-1 rounded hover:bg-red-700 table-action-btn" data-delete-id="${order.id}">Anular</button>
+                        <button class="bg-gray-500 text-white text-xs px-3 py-1 rounded hover:bg-gray-600 table-action-btn" data-reprint-id="${order.id}">Reimprimir</button>
+                        <button class="bg-yellow-500 text-white text-xs px-3 py-1 rounded hover:bg-yellow-600 table-action-btn ${isDelivered ? 'hidden' : ''}" data-edit-id="${order.id}">Editar</button>
+                        <button class="bg-green-500 text-white text-xs px-3 py-1 rounded hover:bg-green-600 table-action-btn disabled:bg-gray-400" data-pay-id="${order.id}" ${isPaid ? 'disabled' : ''}>Marcar Pagado</button>
+                        <button class="bg-blue-500 text-white text-xs px-3 py-1 rounded hover:bg-blue-600 table-action-btn disabled:bg-gray-400" data-deliver-id="${order.id}" ${isDelivered ? 'disabled' : ''}>Marcar Entregado</button>
+                    </div>
+                `;
+            }
+
             orderCard.innerHTML = `
-                <div class="flex justify-between items-start border-b pb-2 mb-2">
+                <div class="flex justify-between items-start border-b pb-2 mb-2 ${isAnulado ? 'border-gray-300' : ''}">
                     <div>
-                        <p class="font-bold text-lg">Pedido #${order.id} - ${order.cliente_nombre}</p>
+                        <p class="font-bold text-lg ${isAnulado ? 'line-through text-gray-500' : ''}">Pedido #${order.id} - ${order.cliente_nombre}</p>
                         <p class="text-sm text-gray-500">${new Date(order.fecha).toLocaleTimeString('es-CL')}</p>
                     </div>
                     <div class="text-right flex-shrink-0">
-                        <p class="font-bold text-lg">$${order.total.toLocaleString('es-CL')}</p>
+                        <p class="font-bold text-lg ${isAnulado ? 'line-through text-gray-400' : ''}">$${order.total.toLocaleString('es-CL')}</p>
                         <p class="text-xs text-gray-500">${order.forma_pago || ''}</p>
                         <p class="text-xs font-semibold ${isPaid ? 'text-green-600' : 'text-red-600'}">${order.estado_pago}</p>
-                        <p class="text-xs font-semibold ${isDelivered ? 'text-green-600' : 'text-blue-600'}">${order.estado}</p>
+                        <p class="text-xs font-semibold ${statusColorClass}">${statusText}</p>
                     </div>
                 </div>
-                <div class="text-sm space-y-1 my-2">
+                <div class="text-sm space-y-1 my-2 ${isAnulado ? 'text-gray-400' : ''}">
                     ${items.map(item => `<div>- ${item.name} ${item.notes ? `<span class="text-gray-500">(${item.notes})</span>` : ''}</div>`).join('')}
                 </div>
-                <div class="text-right mt-3 space-x-2">
-                    <button class="bg-red-600 text-white text-xs px-3 py-1 rounded hover:bg-red-700 table-action-btn" data-delete-id="${order.id}">Eliminar</button>
-                    <button class="bg-gray-500 text-white text-xs px-3 py-1 rounded hover:bg-gray-600 table-action-btn" data-reprint-id="${order.id}">Reimprimir</button>
-                    <button class="bg-yellow-500 text-white text-xs px-3 py-1 rounded hover:bg-yellow-600 table-action-btn ${isDelivered ? 'hidden' : ''}" data-edit-id="${order.id}">Editar</button>
-                    <button class="bg-green-500 text-white text-xs px-3 py-1 rounded hover:bg-green-600 table-action-btn disabled:bg-gray-400" data-pay-id="${order.id}" ${isPaid ? 'disabled' : ''}>Marcar Pagado</button>
-                    <button class="bg-blue-500 text-white text-xs px-3 py-1 rounded hover:bg-blue-600 table-action-btn disabled:bg-gray-400" data-deliver-id="${order.id}" ${isDelivered ? 'disabled' : ''}>Marcar Entregado</button>
-                </div>
+                ${buttonsHtml}
             `;
             historyListEl.appendChild(orderCard);
         });
@@ -188,27 +228,148 @@ async function loadOrderHistory() {
     }
 }
 
-// --- LÓGICA DEL PEDIDO ---
-function addToOrder(item) { currentOrder.push(item); updateOrderSummary(); }
-function removeFromOrder(itemId) { currentOrder = currentOrder.filter(item => item.orderId !== itemId); updateOrderSummary(); }
+// --- LÓGICA DEL PEDIDO (CARRITO) ---
+
+// Función centralizada para guardar un ítem (Añadir o Actualizar)
+function handleSaveOrderItem(itemData) {
+    if (cartItemToEditId) {
+        // Estamos en MODO EDICIÓN: Buscar y reemplazar
+        const index = currentOrder.findIndex(i => i.orderId === cartItemToEditId);
+        if (index !== -1) {
+            // Mantener el orderId original para no perder referencia, actualizar el resto
+            currentOrder[index] = { ...itemData, orderId: cartItemToEditId };
+        }
+        cartItemToEditId = null; // Resetear flag de edición
+    } else {
+        // Estamos en MODO AÑADIR: Push normal
+        currentOrder.push(itemData);
+    }
+    updateOrderSummary();
+}
+
+function removeFromOrder(itemId) { 
+    currentOrder = currentOrder.filter(item => item.orderId !== itemId); 
+    updateOrderSummary(); 
+}
+
+// Función para cargar un ítem en su modal correspondiente para editar
+function openEditCartItem(itemId) {
+    const item = currentOrder.find(i => i.orderId === itemId);
+    if (!item) return;
+
+    cartItemToEditId = itemId; // Marcar que estamos editando este ID
+
+    if (item.type === 'pizza') {
+        // Restaurar configuración de pizza
+        currentPizzaConfig = { 
+            basePizza: { id: item.meta?.baseId || 0, nombre: item.name }, // Reconstrucción parcial segura
+            size: item.size, 
+            price: item.price, 
+            extras: item.extras 
+        };
+        
+        // Buscar la pizza base real si tenemos el ID guardado en meta
+        if (item.meta && item.meta.baseId) {
+            const realBase = (allProducts.pizzas || []).find(p => p.id === item.meta.baseId);
+            if (realBase) currentPizzaConfig.basePizza = realBase;
+        }
+
+        document.getElementById('modal-pizza-name').textContent = item.meta?.isHalfHalf ? "Pizza Mitad y Mitad" : currentPizzaConfig.basePizza.nombre;
+        
+        // Restaurar selects de Mitad y Mitad si aplica
+        if (item.meta && item.meta.isHalfHalf) {
+            hnhCheckbox.checked = true;
+            hnhOptions.classList.remove('hidden');
+            // Repoblar selects (ya deberían estar poblados por openPizzaModal genérico, pero aseguramos)
+            // IMPORTANTE: Aquí asumimos que openPizzaModal se llama antes o repoblamos
+            // Lo ideal es llamar a la lógica de apertura del modal y luego ajustar valores
+            populatePizzaModal(currentPizzaConfig.basePizza, true); // true = modo edición
+            
+            hnhSelect1.value = item.meta.half1Id;
+            hnhSelect2.value = item.meta.half2Id;
+        } else {
+            populatePizzaModal(currentPizzaConfig.basePizza, true);
+            hnhCheckbox.checked = false;
+            hnhOptions.classList.add('hidden');
+        }
+
+        // Restaurar Extras
+        document.querySelectorAll('.extra-checkbox').forEach(cb => {
+            cb.checked = item.extras.some(e => e.id === parseInt(cb.dataset.id));
+        });
+
+        // Restaurar Notas
+        document.getElementById('pizza-notes').value = item.notes || '';
+        
+        // Restaurar Tamaño
+        updateModalUI(); // Esto marcará el botón de tamaño correcto basado en currentPizzaConfig.size
+        
+        // Cambiar texto del botón
+        addToOrderBtn.textContent = "Actualizar Pizza";
+        pizzaModal.classList.remove('hidden');
+
+    } else if (item.type === 'custom_pizza') {
+        // Restaurar Pizza Personalizada
+        customPizzaIngredients.value = item.notes; // Usamos notes para guardar ingredientes
+        customPizzaPriceInput.value = item.price;
+        customPizzaSize = item.size;
+        
+        // Actualizar UI de botones de tamaño
+        customSizeOptions.querySelectorAll('.size-button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.size === customPizzaSize);
+        });
+
+        customAddToOrderButton.textContent = "Actualizar Pizza";
+        customPizzaModal.classList.remove('hidden');
+
+    } else {
+        // Productos simples (Churrascos, Otros) usan Notes Modal
+        currentNoteItem = { 
+            id: item.meta?.baseId, 
+            nombre: item.name, 
+            precio: item.price 
+        }; 
+        // Ojo: para productos simples el precio a veces cambia con agregados, 
+        // pero aquí simplificamos asumiendo que el precio base se mantiene o se editó manualmente si fuera posible.
+        // Si es un "agregado" suelto o "otro", el precio es fijo.
+        
+        document.getElementById('notes-modal-product-name').textContent = item.name;
+        document.getElementById('product-notes').value = item.notes || '';
+        
+        document.getElementById('notes-confirm-btn').textContent = "Actualizar Pedido";
+        notesModal.classList.remove('hidden');
+    }
+}
+
 function updateOrderSummary() {
   orderSummaryEl.innerHTML = '';
   if (currentOrder.length === 0) {
     orderSummaryEl.innerHTML = '<p class="text-center text-gray-400 py-8 italic">El pedido está vacío</p>';
-    // Si estábamos editando un pedido y se vació, reseteamos el estado
     if (editingOrderId) {
-        resetOrderState(); // resetOrderState ya habilita las pestañas
+        resetOrderState(); 
     } else {
-        enableTabs(); // Si no estábamos editando, solo aseguramos habilitar
+        enableTabs(); 
     }
   } else {
-    // Si hay items en el pedido (o se añade el primero), deshabilitamos otras pestañas
     const currentActiveTab = document.querySelector('.tab-button.active')?.dataset.target || 'catalog-tab-content';
-    disableOtherTabs(currentActiveTab); // Deshabilitar otras pestañas MANTENIENDO la actual activa
+    disableOtherTabs(currentActiveTab); 
 
     currentOrder.forEach(item => {
       const itemEl = document.createElement('div');
-      itemEl.className = 'p-2 rounded-lg hover:bg-gray-50';
+      itemEl.className = 'p-2 rounded-lg hover:bg-gray-50 border-b border-gray-100 last:border-0';
+      
+      // Botones de acción para el ítem
+      const actionsHtml = `
+        <div class="flex gap-3 mt-1 justify-end">
+            <button class="text-blue-600 text-xs font-bold hover:underline edit-item-btn flex items-center gap-1" data-id="${item.orderId}">
+                Editar
+            </button>
+            <button class="text-red-500 text-xs font-bold hover:underline remove-item-btn flex items-center gap-1" data-id="${item.orderId}">
+                Quitar
+            </button>
+        </div>
+      `;
+
       itemEl.innerHTML = `
         <div class="flex justify-between items-center">
           <span class="font-semibold text-sm">${item.name}</span>
@@ -218,7 +379,7 @@ function updateOrderSummary() {
           ${item.extras && item.extras.length > 0 ? `+ ${item.extras.map(e => e.nombre).join(', ')}` : ''}
           ${item.notes ? `<br>Nota: ${item.notes}` : ''}
         </div>
-        <button class="text-red-500 text-xs hover:underline remove-item-btn" data-id="${item.orderId}">Quitar</button>
+        ${actionsHtml}
       `;
       orderSummaryEl.appendChild(itemEl);
     });
@@ -228,13 +389,15 @@ function updateOrderSummary() {
 }
 
 
-// --- LÓGICA DE MODALES (PEDIDOS) ---
-function openPizzaModal(pizza) {
-    currentPizzaConfig = { basePizza: pizza, size: 'mediana', price: pizza.precio_mediana, extras: [] };
+// --- LÓGICA DE MODALES ---
+
+// Función auxiliar para poblar el modal de pizza (reutilizable para Add y Edit)
+function populatePizzaModal(pizza, isEditMode = false) {
+    currentPizzaConfig = { basePizza: pizza, size: isEditMode ? currentPizzaConfig.size : 'mediana', price: 0, extras: isEditMode ? currentPizzaConfig.extras : [] };
+    
     document.getElementById('modal-pizza-name').textContent = pizza.nombre;
     const extrasContainer = document.getElementById('extras-container');
     extrasContainer.innerHTML = '';
-    // Filtrar para que solo muestre agregados disponibles
     const availableExtras = allProducts.agregados || [];
     availableExtras.forEach(extra => {
         const label = document.createElement('label');
@@ -242,6 +405,7 @@ function openPizzaModal(pizza) {
         label.innerHTML = `<input type="checkbox" class="extra-checkbox focus:ring-orange-500" data-id="${extra.id}"><span>${extra.nombre}</span>`;
         extrasContainer.appendChild(label);
     });
+
     hnhSelect1.innerHTML = '';
     hnhSelect2.innerHTML = '';
     const availablePizzasForHalves = (allProducts.pizzas || []).filter(p => p.nombre.toLowerCase() !== 'calzone');
@@ -249,17 +413,25 @@ function openPizzaModal(pizza) {
         hnhSelect1.innerHTML += `<option value="${p.id}">${p.nombre}</option>`;
         hnhSelect2.innerHTML += `<option value="${p.id}">${p.nombre}</option>`;
     });
-    // Intentar seleccionar la pizza actual, si no existe, dejar el primero
-    const pizzaExistsInList = availablePizzasForHalves.some(p => p.id === pizza.id);
-    hnhSelect1.value = pizzaExistsInList ? pizza.id : (availablePizzasForHalves[0]?.id || '');
-    hnhSelect2.value = pizzaExistsInList ? pizza.id : (availablePizzasForHalves[0]?.id || '');
-
-    document.getElementById('pizza-notes').value = '';
-    hnhCheckbox.checked = false;
-    hnhOptions.classList.add('hidden');
-    searchExtrasInput.value = '';
-    filterExtrasList(); // Filtrar extras al abrir
+    
+    // Por defecto seleccionamos la pizza actual si no estamos editando (o si estamos editando pero no es mitad y mitad)
+    if (!isEditMode) {
+        const pizzaExistsInList = availablePizzasForHalves.some(p => p.id === pizza.id);
+        hnhSelect1.value = pizzaExistsInList ? pizza.id : (availablePizzasForHalves[0]?.id || '');
+        hnhSelect2.value = pizzaExistsInList ? pizza.id : (availablePizzasForHalves[0]?.id || '');
+        document.getElementById('pizza-notes').value = '';
+        hnhCheckbox.checked = false;
+        hnhOptions.classList.add('hidden');
+        searchExtrasInput.value = '';
+    }
+    
     updateModalUI();
+}
+
+function openPizzaModal(pizza) {
+    cartItemToEditId = null; // Modo añadir
+    addToOrderBtn.textContent = "Agregar"; // Resetear texto botón
+    populatePizzaModal(pizza, false);
     pizzaModal.classList.remove('hidden');
 }
 
@@ -272,16 +444,23 @@ function updateModalUI() {
     const hnhSection = document.getElementById('half-and-half-section');
     const isCalzone = currentPizzaConfig.basePizza.nombre.toLowerCase() === 'calzone';
     hnhSection.classList.toggle('hidden', isCalzone || !['mediana', 'xl'].includes(size));
-    if (isCalzone || !['mediana', 'xl'].includes(size)) {
-      hnhCheckbox.checked = false;
+    
+    // Si cambiamos a tamaño chico y estaba seleccionado mitad y mitad, deseleccionarlo visualmente
+    if ((isCalzone || !['mediana', 'xl'].includes(size)) && hnhCheckbox.checked) {
+      // No desmarcamos hnhCheckbox automáticamente para no perder la intención del usuario si vuelve a cambiar el tamaño,
+      // pero ocultamos las opciones. La lógica de precio lo manejará.
       hnhOptions.classList.add('hidden');
+    } else if (hnhCheckbox.checked) {
+      hnhOptions.classList.remove('hidden');
     }
+    
     updateModalPrice();
 }
 
 function updateModalPrice() {
     const size = currentPizzaConfig.size;
     let basePrice = 0;
+    // Solo aplicar mitad y mitad si el checkbox está marcado Y el tamaño lo permite
     if (hnhCheckbox.checked && ['mediana', 'xl'].includes(size)) {
         const pizza1Id = parseInt(hnhSelect1.value);
         const pizza2Id = parseInt(hnhSelect2.value);
@@ -290,10 +469,9 @@ function updateModalPrice() {
         if(pizza1 && pizza2) {
             const price1 = pizza1[`precio_${size}`] || 0;
             const price2 = pizza2[`precio_${size}`] || 0;
-            basePrice = Math.round((price1 + price2) / 2); // Precio promedio
+            basePrice = Math.round((price1 + price2) / 2); 
         } else {
-            console.warn("Una de las pizzas para mitad/mitad no se encontró:", pizza1Id, pizza2Id);
-             basePrice = currentPizzaConfig.basePizza[`precio_${size}`] || 0; // Fallback al precio base original
+             basePrice = currentPizzaConfig.basePizza[`precio_${size}`] || 0; 
         }
     } else {
         basePrice = currentPizzaConfig.basePizza[`precio_${size}`] || 0;
@@ -314,20 +492,24 @@ function updateModalPrice() {
 }
 
 function openNotesModal(item) {
+    cartItemToEditId = null; // Modo añadir
     currentNoteItem = item;
     document.getElementById('notes-modal-product-name').textContent = item.nombre;
-    document.getElementById('product-notes').value = ''; // Limpiar notas anteriores
+    document.getElementById('product-notes').value = ''; 
+    document.getElementById('notes-confirm-btn').textContent = "Añadir al Pedido";
     notesModal.classList.remove('hidden');
-    document.getElementById('product-notes').focus(); // Foco en el textarea
+    document.getElementById('product-notes').focus(); 
 }
 
 function openCustomPizzaModal() {
+    cartItemToEditId = null; // Modo añadir
     customPizzaIngredients.value = '';
     customPizzaPriceInput.value = '';
     customPizzaSize = 'mediana';
     customSizeOptions.querySelectorAll('.size-button').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.size === 'mediana');
     });
+    customAddToOrderButton.textContent = "Añadir al Pedido";
     customPizzaModal.classList.remove('hidden');
     customPizzaIngredients.focus();
 }
@@ -356,25 +538,21 @@ function collectOrderData() {
             paymentMethod = otherPayment;
         }
     }
-    // Asegurarse de que los extras estén bien formateados (solo nombre y id si es necesario)
     const itemsForDB = currentOrder.map(item => ({
         ...item,
-        extras: item.extras ? item.extras.map(e => ({ id: e.id, nombre: e.nombre })) : [] // Guardar solo id y nombre del extra
+        extras: item.extras ? item.extras.map(e => ({ id: e.id, nombre: e.nombre })) : [] 
     }));
 
     return {
         id: editingOrderId,
         customer: { name: customerName, phone: document.getElementById('customer-phone').value.trim() },
         total: currentOrder.reduce((sum, item) => sum + item.price, 0),
-        items: itemsForDB, // Usar los items formateados
+        items: itemsForDB, 
         timestamp: new Date().toISOString(),
         delivery: { type: deliveryType, time: deliveryTime },
         payment: { status: paymentStatus, method: paymentMethod }
      };
 }
-
-
-// --- Eliminado: LÓGICA DE CONFIGURACIÓN DE PRECIOS ---
 
 
 // --- LÓGICA DE INVENTARIO ---
@@ -437,12 +615,10 @@ async function populateInventory() {
 
 // Función para poblar la pestaña de gestión de productos
 async function populateProductManagement() {
-    productManagementContainer.innerHTML = ''; // Limpiar contenedor
+    productManagementContainer.innerHTML = ''; 
     try {
-        // Reutilizamos getProducts para obtener los datos actualizados
         allProducts = await window.api.getProducts();
 
-        // Mapeo de tipos a títulos y campos relevantes (incluyendo todos los precios)
         const productTypes = {
             pizzas: { title: 'Pizzas', fields: ['nombre', 'ingredientes', 'precio_chica', 'precio_mediana', 'precio_xl'] },
             churrascos: { title: 'Churrascos', fields: ['nombre', 'ingredientes', 'precio'] },
@@ -450,12 +626,10 @@ async function populateProductManagement() {
             otros_productos: { title: 'Otros Productos', fields: ['nombre', 'categoria', 'precio'] }
         };
 
-        // Crear sección para cada tipo de producto
-        for (const typeKey in productTypes) { // Usar typeKey para el objeto productTypes
+        for (const typeKey in productTypes) { 
             const config = productTypes[typeKey];
-            // *** CORRECCIÓN AQUÍ: Usar 'otros' si typeKey es 'otros_productos' ***
             const dataKey = typeKey === 'otros_productos' ? 'otros' : typeKey;
-            const items = allProducts[dataKey] || []; // Usar array vacío si no hay items de ese tipo
+            const items = allProducts[dataKey] || []; 
 
             const section = document.createElement('div');
             section.innerHTML = `
@@ -493,20 +667,17 @@ async function populateProductManagement() {
 }
 
 
-// Función para abrir el modal de producto (añadir o editar)
 function openProductModal(type, product = null) {
-    productForm.reset(); // Limpiar formulario
+    productForm.reset(); 
     editingProductId = product ? product.id : null;
 
-    // Ocultar todos los bloques de campos específicos
     document.getElementById('pizza-fields').classList.add('hidden');
     document.getElementById('churrasco-fields').classList.add('hidden');
     document.getElementById('agregado-fields').classList.add('hidden');
     document.getElementById('otro-fields').classList.add('hidden');
 
-    // Mostrar el bloque correspondiente al tipo
     let fieldsContainerId;
-    let typeNameSingular = "Producto"; // Default
+    let typeNameSingular = "Producto"; 
     switch(type) {
         case 'pizzas': fieldsContainerId = 'pizza-fields'; typeNameSingular = 'Pizza'; break;
         case 'churrascos': fieldsContainerId = 'churrasco-fields'; typeNameSingular = 'Churrasco'; break;
@@ -529,10 +700,9 @@ function openProductModal(type, product = null) {
 
     productModalTitle.textContent = product ? `Editar ${typeNameSingular}` : `Añadir ${typeNameSingular}`;
     productIdInput.value = product ? product.id : '';
-    productTypeInput.value = type; // Usar el tipo de la tabla (ej: otros_productos)
+    productTypeInput.value = type; 
     productNameInput.value = product ? product.nombre : '';
 
-    // Rellenar campos específicos si es edición
     if (product) {
         switch (type) {
             case 'pizzas':
@@ -556,7 +726,6 @@ function openProductModal(type, product = null) {
                 break;
         }
     } else {
-         // Limpiar campos específicos si es añadir (ya que reset no afecta type=number bien a veces)
          switch (type) {
             case 'pizzas':
                 document.getElementById('product-ingredients-pizza').value = '';
@@ -585,16 +754,14 @@ function openProductModal(type, product = null) {
     productNameInput.focus();
 }
 
-// Función para cerrar el modal de producto
 function closeProductModal() {
     productModal.classList.add('hidden');
 }
 
-// Función para guardar (añadir o editar) producto
 async function saveProduct(event) {
-    event.preventDefault(); // Evitar recarga de página por submit
+    event.preventDefault(); 
     const id = productIdInput.value ? parseInt(productIdInput.value) : null;
-    const type = productTypeInput.value; // Este es el nombre de la tabla (ej: 'otros_productos')
+    const type = productTypeInput.value; 
     const name = productNameInput.value.trim();
 
     if (!name) {
@@ -604,7 +771,6 @@ async function saveProduct(event) {
 
     let productData = { id: id, nombre: name };
 
-    // Recoger datos específicos del tipo
      try {
         switch (type) {
             case 'pizzas':
@@ -625,7 +791,7 @@ async function saveProduct(event) {
             case 'otros_productos':
                 productData.categoria = document.getElementById('product-category').value.trim();
                 productData.precio = parseInt(document.getElementById('product-price-otro').value) || 0;
-                 if (!productData.categoria) { // Validar categoría para 'otros'
+                 if (!productData.categoria) { 
                     showAlert("La categoría es obligatoria para 'Otros Productos'.");
                     return;
                 }
@@ -642,10 +808,9 @@ async function saveProduct(event) {
 
     try {
         let result;
-        if (id) { // Editar
+        if (id) { 
             result = await window.api.updateProduct({ type, productData });
-        } else { // Añadir
-            // No enviar 'id' si es null o undefined al añadir
+        } else { 
             const { id: _, ...newData } = productData;
             result = await window.api.addProduct({ type, productData: newData });
         }
@@ -653,10 +818,8 @@ async function saveProduct(event) {
         if (result.success) {
             showAlert(`Producto ${id ? 'actualizado' : 'añadido'} correctamente.`);
             closeProductModal();
-            // Recargar la lista de productos en la pestaña de gestión Y el catálogo
             await refreshProducts();
         } else {
-            // Mostrar error específico de UNIQUE constraint si ocurre
             if (result.message && result.message.includes('UNIQUE constraint failed')) {
                  showAlert(`Error: Ya existe un producto con el nombre "${name}".`);
             } else {
@@ -669,30 +832,27 @@ async function saveProduct(event) {
     }
 }
 
-// Función para abrir el modal de confirmación de eliminación de producto
 function openDeleteProductConfirmation(type, id) {
-     // *** CORRECCIÓN AQUÍ: Usar 'otros' si type es 'otros_productos' ***
     const dataKey = type === 'otros_productos' ? 'otros' : type;
-    const product = findProduct(dataKey, id); // Buscar usando la clave correcta
+    const product = findProduct(dataKey, id); 
     if (!product) {
         showAlert("No se encontró el producto a eliminar.");
         return;
     }
-    productToDelete = { type, id }; // Guardar el tipo de tabla original ('otros_productos')
+    productToDelete = { type, id }; 
     document.getElementById('confirm-delete-product-message').textContent = `¿Estás seguro de que deseas eliminar "${product.nombre}" (${type === 'otros_productos' ? 'Otro Producto' : type.slice(0,-1)})?`;
     confirmDeleteProductModal.classList.remove('hidden');
 }
 
 
-// Función para confirmar la eliminación de producto
 async function confirmDeleteProduct() {
     if (!productToDelete) return;
-    const { type, id } = productToDelete; // type aquí es el nombre de la tabla
+    const { type, id } = productToDelete; 
     try {
         const result = await window.api.deleteProduct({ type, productId: id });
         if (result.success) {
             showAlert("Producto eliminado correctamente.");
-            await refreshProducts(); // Recargar listas
+            await refreshProducts(); 
         } else {
             showAlert(`Error al eliminar producto: ${result.message}`);
         }
@@ -704,14 +864,12 @@ async function confirmDeleteProduct() {
     }
 }
 
-// Función para cerrar el modal de confirmación de eliminación
 function closeDeleteProductConfirmation() {
     confirmDeleteProductModal.classList.add('hidden');
     productToDelete = null;
 }
 
-// Función auxiliar para encontrar un producto por tipo e ID
-function findProduct(dataKey, id) { // Recibe la dataKey ('pizzas', 'otros', etc.)
+function findProduct(dataKey, id) { 
     if (!allProducts[dataKey]) {
          console.warn(`No se encontró la clave de datos '${dataKey}' en allProducts`);
          return null;
@@ -720,17 +878,14 @@ function findProduct(dataKey, id) { // Recibe la dataKey ('pizzas', 'otros', etc
 }
 
 
-// Función para recargar los productos y actualizar las vistas
 async function refreshProducts() {
     try {
         allProducts = await window.api.getProducts();
         if (allProducts && Object.keys(allProducts).length > 0) {
-            displayProducts(allProducts); // Actualiza el catálogo
-            // Actualizar la pestaña de gestión SOLO si está visible
+            displayProducts(allProducts); 
             if (!document.getElementById('products-tab-content').classList.contains('hidden')) {
                 populateProductManagement();
             }
-            // Eliminado: Llamada a populatePriceSettings()
         } else {
              console.error("No se recibieron productos o están vacíos después de refrescar.");
              showAlert("Error: No se pudieron recargar los productos.");
@@ -742,7 +897,7 @@ async function refreshProducts() {
 }
 
 
-// --- EVENT LISTENERS --- (La mayoría sin cambios)
+// --- EVENT LISTENERS ---
 alertModalCloseBtn.addEventListener('click', () => { alertModal.classList.add('hidden'); });
 
 finalizeOrderBtn.addEventListener('click', async () => {
@@ -750,7 +905,7 @@ finalizeOrderBtn.addEventListener('click', async () => {
     if (!fullOrder) return;
     try {
         const filePath = await window.api.generateTicket(fullOrder);
-        if (filePath) showPrintPreview(filePath, false); // Es un ticket
+        if (filePath) showPrintPreview(filePath, false); 
         else showAlert("Hubo un error al generar el ticket.");
     } catch (error) { console.error("Error generando ticket:", error); showAlert("Error crítico al generar el ticket. Revise la consola."); }
 });
@@ -762,7 +917,7 @@ updateOrderBtn.addEventListener('click', async () => {
         const success = await window.api.updateOrder(updatedOrderData);
         if (success) {
             showAlert('Pedido actualizado correctamente.');
-            resetOrderState(); // resetOrderState ya habilita las pestañas
+            resetOrderState(); 
             document.querySelector('.tab-button[data-target="history-tab-content"]').click();
         } else {
             showAlert('Hubo un error al actualizar el pedido.');
@@ -774,9 +929,8 @@ updateOrderBtn.addEventListener('click', async () => {
 document.getElementById('preview-cancel-btn').addEventListener('click', (e) => {
     const type = e.target.dataset.type;
     const path = type === 'shoppingList' ? shoppingListPdfPath : tempPdfPath;
-    if (path) { // Asegurarse de que hay una ruta antes de intentar cancelar
+    if (path) { 
         window.api.cancelPrint(path);
-         // Limpiar la ruta correspondiente
         if (type === 'shoppingList') shoppingListPdfPath = '';
         else tempPdfPath = '';
     } else {
@@ -789,7 +943,7 @@ document.getElementById('preview-cancel-btn').addEventListener('click', (e) => {
 document.getElementById('preview-confirm-btn').addEventListener('click', async (e) => {
     const type = e.target.dataset.type;
     const path = type === 'shoppingList' ? shoppingListPdfPath : tempPdfPath;
-    previewModal.classList.add('hidden'); // Ocultar modal inmediatamente
+    previewModal.classList.add('hidden'); 
 
     if (!path) {
         showAlert("Error: No se encontró la ruta del archivo a imprimir.");
@@ -799,33 +953,34 @@ document.getElementById('preview-confirm-btn').addEventListener('click', async (
     if (type === 'shoppingList') {
         const result = await window.api.confirmPrintShoppingList(path);
         showAlert(result.message);
-        shoppingListPdfPath = ''; // Limpiar ruta después de intentar imprimir
-    } else { // Es un ticket
-        // Usar los datos guardados en fullOrder para confirmar el pedido en la DB
+        shoppingListPdfPath = ''; 
+    } else { 
         const printResult = await window.api.confirmPrint({ filePath: path, orderData: fullOrder });
         if (printResult.success) {
-            resetOrderState(); // resetOrderState habilita tabs
+            resetOrderState(); 
             document.querySelector('.tab-button[data-target="catalog-tab-content"]').click();
             searchInput.value = '';
             searchInput.dispatchEvent(new Event('input'));
         } else {
             showAlert(`Error al imprimir: ${printResult.error}\nRevise la consola para más detalles.`);
         }
-        tempPdfPath = ''; // Limpiar ruta después de intentar imprimir
-        fullOrder = {}; // Limpiar datos del pedido impreso/confirmado
+        tempPdfPath = ''; 
+        fullOrder = {}; 
     }
 });
 
 
 reportBtn.addEventListener('click', async () => { const result = await window.api.generateReport(); showAlert(result.message); });
 
+// --- LISTENER DE HISTORIAL ACTUALIZADO (ANULACIÓN) ---
 historyListEl.addEventListener('click', async (e) => {
     const button = e.target.closest('button');
     if (!button) return;
+    
     if (button.dataset.deliverId) { const orderId = button.dataset.deliverId; const success = await window.api.updateOrderStatus({ orderId: orderId, status: 'Entregado' }); if (success) { loadOrderHistory(); } else { showAlert('Hubo un error al actualizar el pedido.'); } }
+    
     if (button.dataset.editId) {
         const orderId = parseInt(button.dataset.editId);
-        // Primero, asegurarse de que no haya un pedido actual en curso
         if (currentOrder.length > 0) {
             showAlert("Termine o cancele el pedido actual antes de editar uno del historial.");
             return;
@@ -836,11 +991,8 @@ historyListEl.addEventListener('click', async (e) => {
             editingOrderId = orderToEdit.id;
             document.getElementById('customer-name').value = orderToEdit.cliente_nombre;
             document.getElementById('customer-phone').value = orderToEdit.cliente_telefono;
-            // Asegurarse de parsear correctamente y manejar errores
              try {
-                // Rehidratar items con orderId temporal para la UI
                 currentOrder = JSON.parse(orderToEdit.items_json).map(item => ({...item, orderId: Date.now() + Math.random()}));
-                 // Restaurar estado de pago y entrega/hora
                 document.querySelector(`input[name="payment-status"][value="${orderToEdit.estado_pago || 'Por Pagar'}"]`).checked = true;
                 const paymentWrapperVisible = (orderToEdit.estado_pago === 'Pagado');
                 paymentMethodWrapper.classList.toggle('hidden', !paymentWrapperVisible);
@@ -856,7 +1008,7 @@ historyListEl.addEventListener('click', async (e) => {
                         document.getElementById('other-payment-method').value = orderToEdit.forma_pago;
                     }
                 } else {
-                     paymentMethodSelect.value = 'Efectivo'; // Default
+                     paymentMethodSelect.value = 'Efectivo'; 
                      otherPaymentWrapper.classList.add('hidden');
                      document.getElementById('other-payment-method').value = '';
                 }
@@ -868,23 +1020,21 @@ historyListEl.addEventListener('click', async (e) => {
                 if(isScheduled) {
                     document.getElementById('scheduled-time').value = orderToEdit.hora_entrega || '';
                 } else {
-                    // No podemos recalcular la demora exacta, dejamos el default o vacío
-                    document.getElementById('delay-minutes').value = '25'; // O dejar vacío: ''
+                    document.getElementById('delay-minutes').value = '25'; 
                 }
 
 
             } catch (error) {
                 console.error(`Error parseando items o restaurando estado del pedido a editar #${orderId}:`, error);
                 showAlert("Error al cargar los datos del pedido para editar.");
-                editingOrderId = null; // Resetear si hay error
-                resetOrderState(); // Limpiar sidebar
+                editingOrderId = null; 
+                resetOrderState(); 
                 return;
             }
-            updateOrderSummary(); // updateOrderSummary deshabilita otras tabs si hay items
+            updateOrderSummary(); 
             finalizeOrderBtn.classList.add('hidden');
             updateOrderBtn.classList.remove('hidden');
-            document.querySelector('.tab-button[data-target="catalog-tab-content"]').click(); // Cambiar a catálogo
-             // Asegurar que solo la pestaña de catálogo esté activa
+            document.querySelector('.tab-button[data-target="catalog-tab-content"]').click(); 
             disableOtherTabs('catalog-tab-content');
         }
     }
@@ -895,22 +1045,20 @@ historyListEl.addEventListener('click', async (e) => {
         const orderToReprint = orders.find(o => o.id === orderId);
         if (orderToReprint) {
              try {
-                 // Reconstruir fullOrder solo para la reimpresión
                  const orderDataForReprint = {
                      id: orderToReprint.id,
                      customer: { name: orderToReprint.cliente_nombre, phone: orderToReprint.cliente_telefono },
                      total: orderToReprint.total,
-                     items: JSON.parse(orderToReprint.items_json), // Parsear aquí
+                     items: JSON.parse(orderToReprint.items_json), 
                      timestamp: orderToReprint.fecha,
                      delivery: { type: orderToReprint.tipo_entrega, time: orderToReprint.hora_entrega },
                      payment: { status: orderToReprint.estado_pago, method: orderToReprint.forma_pago }
                  };
                 const filePath = await window.api.generateTicket(orderDataForReprint);
                 if (filePath) {
-                    // Guardamos temporalmente los datos para la confirmación
                     tempPdfPath = filePath;
-                    fullOrder = orderDataForReprint; // Guardamos para confirmPrint
-                    showPrintPreview(filePath, false); // Es un ticket
+                    fullOrder = orderDataForReprint; 
+                    showPrintPreview(filePath, false); 
                 } else {
                      showAlert("Hubo un error al generar el ticket de reimpresión.");
                  }
@@ -920,37 +1068,48 @@ historyListEl.addEventListener('click', async (e) => {
              }
         }
     }
+    
+    // MANEJO DEL BOTÓN "ANULAR"
     if (button.dataset.deleteId) {
-        orderToDeleteId = parseInt(button.dataset.deleteId);
-        document.getElementById('confirm-delete-message').textContent = `¿Estás seguro de que deseas eliminar el Pedido #${orderToDeleteId}? Esta acción NO se puede deshacer y renumerará los pedidos del día.`;
-        confirmDeleteModal.classList.remove('hidden');
+        orderToCancelId = parseInt(button.dataset.deleteId);
+        cancelReasonInput.value = ''; 
+        cancelOrderModal.classList.remove('hidden'); 
+        cancelReasonInput.focus();
     }
 });
 
+// Listeners para el modal de anulación
+cancelAnulacionBtn.addEventListener('click', () => {
+    cancelOrderModal.classList.add('hidden');
+    orderToCancelId = null;
+});
 
-document.getElementById('delete-cancel-btn').addEventListener('click', () => { confirmDeleteModal.classList.add('hidden'); orderToDeleteId = null; });
-
-document.getElementById('delete-confirm-btn').addEventListener('click', async () => {
-    if (orderToDeleteId) {
-        const success = await window.api.deleteOrder(orderToDeleteId);
-        if (success) {
-            showAlert(`Pedido #${orderToDeleteId} eliminado y pedidos renumerados.`);
-            loadOrderHistory(); // Recargar historial para ver cambios
+confirmAnulacionBtn.addEventListener('click', async () => {
+    const motivo = cancelReasonInput.value.trim();
+    if (!motivo) {
+        showAlert("Por favor, ingresa un motivo para la anulación.");
+        return;
+    }
+    
+    if (orderToCancelId) {
+        const result = await window.api.deleteOrder({ orderId: orderToCancelId, motivo: motivo });
+        if (result.success) {
+            showAlert(`Pedido #${orderToCancelId} anulado correctamente.`);
+            loadOrderHistory(); 
         } else {
-            showAlert('Error al eliminar el pedido.');
+            showAlert(`Error al anular el pedido: ${result.message}`);
         }
-        confirmDeleteModal.classList.add('hidden');
-        orderToDeleteId = null;
+        cancelOrderModal.classList.add('hidden');
+        orderToCancelId = null;
     }
 });
 
-// Eliminado: Listener para savePricesBtn
 
 saveInventoryBtn.addEventListener('click', async () => {
     const updates = [];
     document.querySelectorAll('.inventory-input').forEach(input => {
         const id = parseInt(input.dataset.id);
-        const cantidad = input.value; // Guardar como texto
+        const cantidad = input.value; 
         const comprarCheckbox = document.querySelector(`.buy-checkbox[data-id="${id}"]`);
         const comprar = comprarCheckbox.checked ? 1 : 0;
         updates.push({ id, cantidad, comprar });
@@ -966,103 +1125,180 @@ saveInventoryBtn.addEventListener('click', async () => {
 printShoppingListBtn.addEventListener('click', async () => {
     const result = await window.api.generateShoppingListPdf();
     if (result.success) {
-        showPrintPreview(result.filePath, true); // Es una lista de compras
+        showPrintPreview(result.filePath, true); 
     } else {
         showAlert(result.message);
     }
 });
 
-orderSummaryEl.addEventListener('click', (e) => { if (e.target.matches('.remove-item-btn')) { const itemId = parseFloat(e.target.dataset.id); removeFromOrder(itemId); } });
+// Eventos para el resumen de pedido (EDITAR y ELIMINAR)
+orderSummaryEl.addEventListener('click', (e) => { 
+    if (e.target.matches('.remove-item-btn') || e.target.closest('.remove-item-btn')) { 
+        const btn = e.target.matches('.remove-item-btn') ? e.target : e.target.closest('.remove-item-btn');
+        const itemId = parseFloat(btn.dataset.id); 
+        removeFromOrder(itemId); 
+    }
+    
+    if (e.target.matches('.edit-item-btn') || e.target.closest('.edit-item-btn')) {
+        const btn = e.target.matches('.edit-item-btn') ? e.target : e.target.closest('.edit-item-btn');
+        const itemId = parseFloat(btn.dataset.id);
+        openEditCartItem(itemId);
+    }
+});
+
 document.querySelectorAll('input[name="delivery-type"]').forEach(radio => { radio.addEventListener('change', (e) => { if (e.target.value === 'demora') { document.getElementById('delivery-delay-input').classList.remove('hidden'); document.getElementById('delivery-scheduled-input').classList.add('hidden'); } else { document.getElementById('delivery-delay-input').classList.add('hidden'); document.getElementById('delivery-scheduled-input').classList.remove('hidden'); } }); });
 paymentMethodSelect.addEventListener('change', () => { otherPaymentWrapper.classList.toggle('hidden', paymentMethodSelect.value !== 'otra'); });
 document.querySelectorAll('input[name="payment-status"]').forEach(radio => { radio.addEventListener('change', (e) => { paymentMethodWrapper.classList.toggle('hidden', e.target.value !== 'Pagado'); }); });
 
 document.querySelectorAll('.tab-button').forEach(tab => {
   tab.addEventListener('click', () => {
-    // Permitir cambio de pestaña solo si no se está editando un pedido O si el pedido está vacío
     if (editingOrderId && currentOrder.length > 0 && tab.dataset.target !== 'catalog-tab-content') {
          showAlert("Debe finalizar o cancelar la edición del pedido actual antes de cambiar de pestaña.");
-         return; // Evitar cambio de pestaña
+         return; 
     }
 
-    // Quitar 'active' de todas las pestañas y contenidos
-    document.querySelectorAll('.tab-button').forEach(item => { item.classList.remove('active'); item.classList.add('border-transparent', 'text-gray-500'); item.classList.remove('border-orange-500','text-orange-600', 'bg-orange-50');}); // Usar naranja como color activo
+    document.querySelectorAll('.tab-button').forEach(item => { item.classList.remove('active'); item.classList.add('border-transparent', 'text-gray-500'); item.classList.remove('border-orange-500','text-orange-600', 'bg-orange-50');}); 
     document.querySelectorAll('.tab-content').forEach(content => { content.classList.add('hidden'); });
 
-    // Activar la pestaña clickeada y su contenido
-    tab.classList.add('active'); // Estilo activo (definido en CSS)
-    tab.classList.remove('border-transparent', 'text-gray-500'); // Quitar estilo inactivo
+    tab.classList.add('active'); 
+    tab.classList.remove('border-transparent', 'text-gray-500'); 
 
     const targetContent = document.getElementById(tab.dataset.target);
     if (targetContent) { targetContent.classList.remove('hidden'); }
 
-    // Cargar datos específicos si es necesario
     if (tab.dataset.target === 'history-tab-content') { loadOrderHistory(); }
-    // Eliminado: Llamada a populatePriceSettings
     if (tab.dataset.target === 'inventory-tab-content') { populateInventory(); }
-    // CRUD: Cargar datos de la pestaña de productos
     if (tab.dataset.target === 'products-tab-content') { populateProductManagement(); }
   });
 });
 
-// Listener para sub-pestañas del catálogo
 document.querySelectorAll('#catalog-tab-content .sub-tab-button').forEach(tab => {
     tab.addEventListener('click', () => {
-        // Remover clase activa de otras sub-pestañas DENTRO DEL CATÁLOGO
         document.querySelectorAll('#catalog-tab-content .sub-tab-button').forEach(item => item.classList.remove('active'));
-        // Añadir clase activa a la clickeada
         tab.classList.add('active');
-        // Ocultar todos los contenidos de sub-pestañas DENTRO DEL CATÁLOGO
         document.querySelectorAll('#catalog-content .sub-tab-content').forEach(content => content.classList.add('hidden'));
-        // Mostrar el contenido correspondiente
         const targetContent = document.getElementById(tab.dataset.target);
         if (targetContent) {
             targetContent.classList.remove('hidden');
         }
-         // Limpiar búsqueda al cambiar de sub-pestaña
         searchInput.value = '';
-        searchInput.dispatchEvent(new Event('input')); // Disparar evento input para aplicar filtro vacío
+        searchInput.dispatchEvent(new Event('input')); 
     });
 });
 
 
-addToOrderBtn.addEventListener('click', () => { let itemName; let baseName; if (hnhCheckbox.checked && ['mediana', 'xl'].includes(currentPizzaConfig.size)) { const pizza1Name = hnhSelect1.options[hnhSelect1.selectedIndex].text.toLowerCase(); const pizza2Name = hnhSelect2.options[hnhSelect2.selectedIndex].text.toLowerCase(); baseName = `Mitad ${pizza1Name}/Mitad ${pizza2Name}`; } else { baseName = currentPizzaConfig.basePizza.nombre; } const sizePrefix = {xl: 'XL - ',mediana: 'M - ',chica: 'CH - '}[currentPizzaConfig.size] || ''; itemName = sizePrefix + baseName; const finalItem = { orderId: Date.now() + Math.random(), name: itemName, size: currentPizzaConfig.size, extras: currentPizzaConfig.extras.map(e => ({ id: e.id, nombre: e.nombre })), price: currentPizzaConfig.price, notes: document.getElementById('pizza-notes').value.trim() }; addToOrder(finalItem); pizzaModal.classList.add('hidden'); });
+// --- CONFIRMACIÓN DE MODALES DE PRODUCTO ---
+
+// Pizza Modal Confirm
+addToOrderBtn.addEventListener('click', () => { 
+    let itemName; 
+    let meta = { baseId: currentPizzaConfig.basePizza.id, isHalfHalf: false };
+
+    if (hnhCheckbox.checked && ['mediana', 'xl'].includes(currentPizzaConfig.size)) { 
+        const pizza1Name = hnhSelect1.options[hnhSelect1.selectedIndex].text; 
+        const pizza2Name = hnhSelect2.options[hnhSelect2.selectedIndex].text; 
+        itemName = `Mitad ${pizza1Name} / Mitad ${pizza2Name}`; 
+        
+        // Guardar meta para edición futura
+        meta.isHalfHalf = true;
+        meta.half1Id = hnhSelect1.value;
+        meta.half2Id = hnhSelect2.value;
+    } else { 
+        itemName = currentPizzaConfig.basePizza.nombre; 
+    } 
+    
+    const sizePrefix = {xl: 'XL - ', mediana: 'M - ', chica: 'CH - '}[currentPizzaConfig.size] || ''; 
+    itemName = sizePrefix + itemName; 
+    
+    const finalItem = { 
+        orderId: Date.now() + Math.random(), // ID temporal único
+        type: 'pizza', // Identificador de tipo para saber qué modal abrir al editar
+        name: itemName, 
+        size: currentPizzaConfig.size, 
+        extras: currentPizzaConfig.extras.map(e => ({ id: e.id, nombre: e.nombre })), 
+        price: currentPizzaConfig.price, 
+        notes: document.getElementById('pizza-notes').value.trim(),
+        meta: meta // Guardamos los datos crudos
+    }; 
+    
+    handleSaveOrderItem(finalItem); // Usar handler centralizado
+    pizzaModal.classList.add('hidden'); 
+});
+
+// Listeners de UI del modal Pizza
 document.getElementById('size-options').addEventListener('click', (e) => { if (e.target.matches('.size-button')) { currentPizzaConfig.size = e.target.dataset.size; updateModalUI(); } });
 document.getElementById('extras-container').addEventListener('input', (e) => { if(e.target.matches('.extra-checkbox')) { updateModalPrice(); } });
 document.getElementById('cancel-button').addEventListener('click', () => { pizzaModal.classList.add('hidden'); });
 hnhCheckbox.addEventListener('change', () => { hnhOptions.classList.toggle('hidden', !hnhCheckbox.checked); updateModalPrice(); });
 hnhSelect1.addEventListener('change', updateModalPrice);
 hnhSelect2.addEventListener('change', updateModalPrice);
+
+// Notes Modal Confirm (Churrascos / Otros)
 document.getElementById('notes-cancel-btn').addEventListener('click', () => { notesModal.classList.add('hidden'); });
-document.getElementById('notes-confirm-btn').addEventListener('click', () => { const notes = document.getElementById('product-notes').value.trim(); const itemData = { orderId: Date.now() + Math.random(), name: currentNoteItem.nombre, price: currentNoteItem.precio, size: null, extras: [], notes: notes }; addToOrder(itemData); notesModal.classList.add('hidden'); });
+document.getElementById('notes-confirm-btn').addEventListener('click', () => { 
+    const notes = document.getElementById('product-notes').value.trim(); 
+    const itemData = { 
+        orderId: Date.now() + Math.random(), 
+        type: 'simple', // Tipo simple
+        name: currentNoteItem.nombre, 
+        price: currentNoteItem.precio, 
+        size: null, 
+        extras: [], 
+        notes: notes,
+        meta: { baseId: currentNoteItem.id } 
+    }; 
+    
+    handleSaveOrderItem(itemData); 
+    notesModal.classList.add('hidden'); 
+});
+
 document.getElementById('history-payment-method').addEventListener('change', (e) => { document.getElementById('history-other-payment-wrapper').classList.toggle('hidden', e.target.value !== 'otra'); });
 document.getElementById('payment-cancel-btn').addEventListener('click', () => { confirmPaymentModal.classList.add('hidden'); payingOrderId = null; });
 document.getElementById('payment-confirm-btn').addEventListener('click', async () => { let paymentMethod = document.getElementById('history-payment-method').value; if (paymentMethod === 'otra') { const otherPayment = document.getElementById('history-other-payment-method').value.trim(); if (!otherPayment) { showAlert('Por favor, especifique la otra forma de pago.'); return; } paymentMethod = otherPayment; } const success = await window.api.updatePaymentStatus({ orderId: payingOrderId, status: 'Pagado', paymentMethod: paymentMethod }); if (success) { loadOrderHistory(); } else { showAlert('Hubo un error al actualizar el estado de pago.'); } confirmPaymentModal.classList.add('hidden'); payingOrderId = null; });
+
+// Custom Pizza Confirm
 customSizeOptions.addEventListener('click', (e) => { if (e.target.matches('.size-button')) { customPizzaSize = e.target.dataset.size; customSizeOptions.querySelectorAll('.size-button').forEach(btn => { btn.classList.toggle('active', btn.dataset.size === customPizzaSize); }); } });
 customCancelButton.addEventListener('click', () => { customPizzaModal.classList.add('hidden'); });
-customAddToOrderButton.addEventListener('click', () => { const ingredients = customPizzaIngredients.value.trim(); const price = parseInt(customPizzaPriceInput.value); if (!ingredients) { showAlert('Por favor, ingrese los ingredientes de la pizza.'); return; } if (isNaN(price) || price <= 0) { showAlert('Por favor, ingrese un precio válido.'); return; } const sizePrefix = {xl: 'XL - ',mediana: 'M - ',chica: 'CH - '}[customPizzaSize] || ''; const itemName = `${sizePrefix}Pizza Personalizada`; const finalItem = { orderId: Date.now() + Math.random(), name: itemName, size: customPizzaSize, extras: [], price: price, notes: ingredients }; addToOrder(finalItem); customPizzaModal.classList.add('hidden'); });
+customAddToOrderButton.addEventListener('click', () => { 
+    const ingredients = customPizzaIngredients.value.trim(); 
+    const price = parseInt(customPizzaPriceInput.value); 
+    if (!ingredients) { showAlert('Por favor, ingrese los ingredientes de la pizza.'); return; } 
+    if (isNaN(price) || price <= 0) { showAlert('Por favor, ingrese un precio válido.'); return; } 
+    
+    const sizePrefix = {xl: 'XL - ',mediana: 'M - ',chica: 'CH - '}[customPizzaSize] || ''; 
+    const itemName = `${sizePrefix}Pizza Personalizada`; 
+    
+    const finalItem = { 
+        orderId: Date.now() + Math.random(), 
+        type: 'custom_pizza',
+        name: itemName, 
+        size: customPizzaSize, 
+        extras: [], 
+        price: price, 
+        notes: ingredients 
+    }; 
+    
+    handleSaveOrderItem(finalItem); 
+    customPizzaModal.classList.add('hidden'); 
+});
 
 // --- CRUD: EVENT LISTENERS PRODUCTOS ---
 productManagementContainer.addEventListener('click', (e) => {
-    // Botón Añadir Producto
     if (e.target.matches('.add-product-btn')) {
         const type = e.target.dataset.type;
         openProductModal(type);
     }
-    // Botón Editar Producto
     if (e.target.matches('.edit-product-btn')) {
         const type = e.target.dataset.type;
         const id = parseInt(e.target.dataset.id);
-         // *** CORRECCIÓN AQUÍ: Usar 'otros' si type es 'otros_productos' para buscar ***
          const dataKey = type === 'otros_productos' ? 'otros' : type;
-        const product = findProduct(dataKey, id); // Buscar usando la clave correcta
+        const product = findProduct(dataKey, id); 
         if (product) {
-            openProductModal(type, product); // Pasar el tipo de tabla original ('otros_productos')
+            openProductModal(type, product); 
         } else {
             showAlert("No se encontró el producto para editar.");
         }
     }
-    // Botón Eliminar Producto
     if (e.target.matches('.delete-product-btn')) {
         const type = e.target.dataset.type;
         const id = parseInt(e.target.dataset.id);
@@ -1071,42 +1307,34 @@ productManagementContainer.addEventListener('click', (e) => {
 });
 
 
-// Listener para el formulario de producto (submit)
 productForm.addEventListener('submit', saveProduct);
-// Listener para el botón cancelar del modal de producto
 document.getElementById('product-cancel-button').addEventListener('click', closeProductModal);
-// Listeners para los botones del modal de confirmación de eliminación de producto
 document.getElementById('delete-product-cancel-btn').addEventListener('click', closeDeleteProductConfirmation);
 document.getElementById('delete-product-confirm-btn').addEventListener('click', confirmDeleteProduct);
 
 
 // --- FUNCIONES DE RENDERIZADO Y BÚSQUEDA ---
 function displayProducts(products) {
-  // Limpiar contenedores existentes
   pizzasContainer.innerHTML = '';
   churrascosContainer.innerHTML = '';
   otrosContainer.innerHTML = '';
 
-  // Renderizar Pizzas
-  (products.pizzas || []).forEach(pizza => { pizzasContainer.appendChild(createProductCard(pizza, 'pizzas')); }); // Usar plural para tipo
+  (products.pizzas || []).forEach(pizza => { pizzasContainer.appendChild(createProductCard(pizza, 'pizzas')); }); 
   const customPizzaCard = document.createElement('div');
-  customPizzaCard.className = 'bg-white p-3 rounded-lg shadow cursor-pointer hover:shadow-xl transition-shadow text-center border-2 border-dashed border-blue-400 flex items-center justify-center product-card h-24'; // Añadido product-card y h-24
-  customPizzaCard.dataset.name = "pizza personalizada"; // Para búsqueda
-  customPizzaCard.innerHTML = `<h3 class="font-bold text-sm leading-tight text-blue-600">+ Pizza Personalizada</h3>`; // Tamaño fuente ajustado
+  customPizzaCard.className = 'bg-white p-3 rounded-lg shadow cursor-pointer hover:shadow-xl transition-shadow text-center border-2 border-dashed border-blue-400 flex items-center justify-center product-card h-24'; 
+  customPizzaCard.dataset.name = "pizza personalizada"; 
+  customPizzaCard.innerHTML = `<h3 class="font-bold text-sm leading-tight text-blue-600">+ Pizza Personalizada</h3>`; 
   customPizzaCard.addEventListener('click', openCustomPizzaModal);
   pizzasContainer.appendChild(customPizzaCard);
 
-  // Renderizar Churrascos
-  (products.churrascos || []).forEach(churrasco => { churrascosContainer.appendChild(createProductCard(churrasco, 'churrascos')); }); // Usar plural para tipo
+  (products.churrascos || []).forEach(churrasco => { churrascosContainer.appendChild(createProductCard(churrasco, 'churrascos')); }); 
 
-  // Renderizar Otros Productos (usando la clave 'otros')
-  const otrosAgrupados = groupByCategory(products.otros || []); // << CORRECCIÓN AQUÍ
+  const otrosAgrupados = groupByCategory(products.otros || []); 
   for (const categoria in otrosAgrupados) {
     const categoriaWrapper = document.createElement('div');
     categoriaWrapper.innerHTML = `<h2 class="text-xl font-bold mt-4 mb-2 text-gray-700">${categoria}</h2>`;
     const grid = document.createElement('div');
     grid.className = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4';
-    // Pasar 'otros_productos' como tipo para la lógica de createProductCard
     otrosAgrupados[categoria].forEach(item => { grid.appendChild(createProductCard(item, 'otros_productos')); });
     categoriaWrapper.appendChild(grid);
     otrosContainer.appendChild(categoriaWrapper);
@@ -1115,28 +1343,27 @@ function displayProducts(products) {
 
 function createProductCard(item, type) {
   const card = document.createElement('div');
-  card.className = 'product-card bg-white p-3 rounded-lg shadow cursor-pointer hover:shadow-xl transition-shadow text-center flex flex-col justify-center items-center h-24'; // Estilo base para tarjeta
+  card.className = 'product-card bg-white p-3 rounded-lg shadow cursor-pointer hover:shadow-xl transition-shadow text-center flex flex-col justify-center items-center h-24'; 
   card.dataset.name = item.nombre.toLowerCase();
-  card.innerHTML = `<h3 class="font-bold text-sm leading-tight">${item.nombre}</h3>`; // Tamaño fuente ajustado
+  card.innerHTML = `<h3 class="font-bold text-sm leading-tight">${item.nombre}</h3>`; 
 
-  // Diferenciar acción basada en el tipo (nombre de tabla o 'pizzas')
   if (type === 'pizzas') {
       card.addEventListener('click', () => openPizzaModal(item));
   } else if (type === 'churrascos') {
-      // Para churrascos, ahora también abrimos el modal de notas
       card.addEventListener('click', () => openNotesModal(item));
-  } else if (type === 'otros_productos' || type === 'agregados') { // Agregados también se añaden directo
+  } else if (type === 'otros_productos' || type === 'agregados') { 
       card.addEventListener('click', () => {
           const itemData = {
-              orderId: Date.now() + Math.random(), // ID único para el item en el pedido actual
+              orderId: Date.now() + Math.random(), 
+              type: 'simple', // Marcar como simple para edición futura
               name: item.nombre,
-              // Determinar precio correcto (agregados pueden tener varios, otros_productos solo uno)
-              price: item.precio ?? item.precio_individual ?? 0, // Usar ?? para tomar el primer valor no nulo/undefined, o 0
-              size: null, // No aplica tamaño
-              extras: [], // No aplica extras directamente aquí
-              notes: ''   // Sin notas por defecto
+              price: item.precio ?? item.precio_individual ?? 0, 
+              size: null, 
+              extras: [], 
+              notes: '',
+              meta: { baseId: item.id }   
           };
-          addToOrder(itemData);
+          handleSaveOrderItem(itemData); // Usar handler centralizado
       });
   } else {
         console.warn(`Tipo de producto desconocido en createProductCard: ${type}`);
@@ -1149,11 +1376,9 @@ function groupByCategory(items) { return items.reduce((acc, item) => { const key
 
 searchInput.addEventListener('input', (e) => {
     const searchTerm = e.target.value.toLowerCase();
-    // Afectar solo a las tarjetas de producto en la pestaña de catálogo activa
     const activeCatalogTab = document.querySelector('#catalog-content .sub-tab-content:not(.hidden)');
     if (activeCatalogTab) {
         activeCatalogTab.querySelectorAll('.product-card').forEach(card => {
-            // Asegurarse que la tarjeta tenga dataset.name antes de filtrar
             if (card.dataset.name) {
                  card.classList.toggle('hidden', !card.dataset.name.includes(searchTerm));
             }
@@ -1162,7 +1387,6 @@ searchInput.addEventListener('input', (e) => {
 });
 
 
-// Función para filtrar lista de extras en el modal
 function filterExtrasList() {
     const searchTerm = searchExtrasInput.value.toLowerCase();
     document.querySelectorAll('#extras-container label').forEach(label => {
@@ -1170,20 +1394,16 @@ function filterExtrasList() {
         label.classList.toggle('hidden', !extraName.includes(searchTerm));
     });
 }
-// Listener para input de búsqueda de extras
 searchExtrasInput.addEventListener('input', filterExtrasList);
 
 
 // --- INICIALIZACIÓN ---
 document.addEventListener('DOMContentLoaded', () => {
-  // Cargar productos iniciales
-  refreshProducts(); // Usar refreshProducts para cargar todo inicialmente
+  refreshProducts(); 
 
-  // Listener para actualizaciones de inventario remotas
   window.api.onInventoryUpdate(() => {
       console.log('Señal de actualización de inventario recibida.');
       const inventoryTab = document.getElementById('inventory-tab-content');
-      // Verificar si inventoryTab existe y no está oculta
       if (inventoryTab && !inventoryTab.classList.contains('hidden')) {
           console.log('Actualizando la vista del inventario...');
           populateInventory();
@@ -1191,14 +1411,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 
-  // Listeners para botones de la barra de título
   document.getElementById('minimize-btn').addEventListener('click', () => { window.api.minimizeWindow(); });
   document.getElementById('maximize-btn').addEventListener('click', () => { window.api.maximizeWindow(); });
   document.getElementById('close-btn').addEventListener('click', () => { window.api.closeWindow(); });
 
-  // Activar la primera pestaña (Catálogo) por defecto visualmente
    const firstTab = document.querySelector('.tab-button');
    if(firstTab) firstTab.click();
-   const firstSubTab = document.querySelector('.sub-tab-button[data-target="pizzas-tab"]'); // Ser más específico
+   const firstSubTab = document.querySelector('.sub-tab-button[data-target="pizzas-tab"]'); 
    if(firstSubTab) firstSubTab.click();
 });
