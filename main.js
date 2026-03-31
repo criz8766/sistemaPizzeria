@@ -12,8 +12,13 @@ const express = require("express");
 const cors = require("cors");
 const { Bonjour } = require("bonjour-service");
 
+// --- SOCKET.IO IMPORTS ---
+const http = require('http');
+const { Server } = require("socket.io");
+
 let mainWindow;
 let bonjour;
+let io; // Variable global para el Socket
 
 // Rutas de la base de datos
 const userDataPath = app.getPath("userData");
@@ -25,7 +30,6 @@ const sourceDbPath = app.isPackaged
 // Copia la base de datos inicial si no existe en userData
 if (!fs.existsSync(dbPath)) {
   try {
-    // Asegura que el directorio exista
     fs.mkdirSync(userDataPath, { recursive: true });
     fs.copyFileSync(sourceDbPath, dbPath);
     console.log(`Base de datos copiada a: ${dbPath}`);
@@ -40,24 +44,21 @@ const envPath = app.isPackaged
   : path.join(__dirname, ".env");
 require("dotenv").config({ path: envPath });
 
-// --- CORRECCIÓN: Migración de Base de Datos con Async/Await ---
-// Esto soluciona el error "Database handle is closed" asegurando que se espere a terminar antes de cerrar.
+// Migración de Base de Datos
 async function ensureDatabaseSchema() {
   return new Promise((resolve, reject) => {
     const db = new sqlite3.Database(dbPath, (err) => {
       if (err) {
         console.error("Error abriendo BD para migración:", err.message);
-        return resolve(); // Resolvemos para intentar seguir aunque falle la conexión
+        return resolve(); 
       }
     });
 
-    // Helper para hacer consultas con promesas
     const all = (sql) => new Promise((res, rej) => db.all(sql, (e, r) => e ? rej(e) : res(r)));
     const run = (sql) => new Promise((res, rej) => db.run(sql, (e) => e ? rej(e) : res()));
 
     (async () => {
       try {
-        // 1. Tabla PEDIDOS: Columnas de anulación
         const pedidosCols = await all(`PRAGMA table_info(pedidos)`);
         
         if (!pedidosCols.some(c => c.name === 'anulado')) {
@@ -70,7 +71,6 @@ async function ensureDatabaseSchema() {
           console.log("[Migración] Columna 'motivo_anulacion' creada exitosamente.");
         }
 
-        // 2. Tabla INVENTARIO: Columna comprar
         const invCols = await all(`PRAGMA table_info(inventario)`);
         if (!invCols.some(c => c.name === 'comprar')) {
           await run(`ALTER TABLE inventario ADD COLUMN comprar INTEGER NOT NULL DEFAULT 0`);
@@ -82,14 +82,13 @@ async function ensureDatabaseSchema() {
       } finally {
         db.close((err) => {
           if (err) console.error("Error cerrando BD migración:", err.message);
-          resolve(); // Terminamos la promesa principal
+          resolve(); 
         });
       }
     })();
   });
 }
 
-// Función para abrir la base de datos (usada por los handlers normales)
 const openDb = (readOnly = false) => {
   const mode = readOnly ? sqlite3.OPEN_READONLY : sqlite3.OPEN_READWRITE;
   return new sqlite3.Database(dbPath, mode, (err) => {
@@ -97,7 +96,6 @@ const openDb = (readOnly = false) => {
   });
 };
 
-// Obtiene la fecha local en formato YYYY-MM-DD
 const getLocalDate = () => {
   const now = new Date();
   const year = now.getFullYear();
@@ -108,7 +106,6 @@ const getLocalDate = () => {
 
 // --- MANEJADORES IPC ---
 
-// Obtener todos los productos
 ipcMain.handle("get-products", async () => {
   const db = openDb(true);
   const runQuery = (sql) =>
@@ -141,14 +138,12 @@ ipcMain.handle("get-products", async () => {
   }
 });
 
-// CRUD: Añadir un nuevo producto
 ipcMain.handle("add-product", async (event, { type, productData }) => {
   const db = openDb();
   let sql = "";
   let params = [];
   const tableName = type; 
 
-  // Validar nombre de tabla
   const validTables = ['pizzas', 'churrascos', 'agregados', 'otros_productos'];
   if (!validTables.includes(tableName)) {
     return { success: false, message: "Tipo de producto inválido." };
@@ -171,7 +166,6 @@ ipcMain.handle("add-product", async (event, { type, productData }) => {
   });
 });
 
-// CRUD: Actualizar un producto existente
 ipcMain.handle("update-product", async (event, { type, productData }) => {
   const db = openDb();
   let sql = "";
@@ -201,7 +195,6 @@ ipcMain.handle("update-product", async (event, { type, productData }) => {
   });
 });
 
-// CRUD: Eliminar un producto
 ipcMain.handle("delete-product", async (event, { type, productId }) => {
   const db = openDb();
   const tableName = type;
@@ -225,7 +218,6 @@ ipcMain.handle("delete-product", async (event, { type, productId }) => {
   });
 });
 
-// Generar PDF del ticket
 ipcMain.handle("generate-ticket", async (event, orderData) => {
   const ticketWidth = 204; 
   const tempFilePath = path.join(os.tmpdir(), `ticket-${Date.now()}.pdf`);
@@ -246,7 +238,6 @@ ipcMain.handle("generate-ticket", async (event, orderData) => {
     doc.moveDown(4); 
   }
 
-  // Encabezado
   doc.font("Helvetica-Bold").fontSize(14).text("Pizzería Piamonte", { align: "center" });
   doc.moveDown(0.5);
   doc.font("Helvetica").fontSize(9);
@@ -255,7 +246,6 @@ ipcMain.handle("generate-ticket", async (event, orderData) => {
   doc.text("Instagram: @pizzeria_piamonte_chillan", { align: "center" });
   doc.moveDown(1);
 
-  // Info del pedido
   doc.font("Helvetica").fontSize(10);
   doc.text(`Pedido para: ${orderData.customer.name}`, { align: "center" });
   const orderDate = new Date(orderData.timestamp);
@@ -271,11 +261,9 @@ ipcMain.handle("generate-ticket", async (event, orderData) => {
   }
   doc.moveDown(0.5);
 
-  // Línea separadora
   doc.moveTo(5, doc.y).lineTo(199, doc.y).dash(2, { space: 3 }).stroke().undash();
   doc.moveDown(0.5);
 
-  // Items del pedido
   orderData.items.forEach((item) => {
     const yPosition = doc.y;
     const itemTextWidth = 140; 
@@ -299,7 +287,6 @@ ipcMain.handle("generate-ticket", async (event, orderData) => {
   doc.moveTo(5, doc.y).lineTo(199, doc.y).dash(2, { space: 3 }).stroke().undash();
   doc.moveDown(0.5);
 
-  // Totales y Propina
   const totalProductos = orderData.total;
   const propina = Math.round(totalProductos * 0.1);
   const totalConPropina = totalProductos + propina;
@@ -354,7 +341,8 @@ ipcMain.handle("confirm-print", async (event, { filePath, orderData }) => {
     } else {
       // Insertar nuevo pedido
       const sql = `INSERT INTO pedidos (cliente_nombre, cliente_telefono, total, items_json, fecha, tipo_entrega, hora_entrega, forma_pago, estado_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-      await runDb(sql, [
+      
+      const result = await runDb(sql, [
         orderData.customer.name,
         orderData.customer.phone,
         orderData.total,
@@ -365,6 +353,26 @@ ipcMain.handle("confirm-print", async (event, { filePath, orderData }) => {
         orderData.payment.method,
         orderData.payment.status,
       ]);
+
+      // --- EMITIR SEÑAL A DISPOSITIVOS MÓVILES (SOCKET) ---
+      // Si tenemos un socket activo y acabamos de crear un pedido, avisamos.
+      if (io) {
+        console.log("📡 Nuevo pedido creado. Enviando notificación a móviles...");
+        
+        // Creamos un objeto con los datos, incluyendo el ID recién generado
+        const socketPayload = {
+            id: result.lastID, // ID autogenerado por SQLite
+            customer: orderData.customer,
+            total: orderData.total,
+            items: orderData.items,
+            delivery: orderData.delivery,
+            timestamp: orderData.timestamp
+        };
+        
+        // Emitimos el evento a todos los clientes conectados
+        io.emit('nuevo_pedido', socketPayload);
+      }
+      // ---------------------------------------------------
     }
   } catch (dbErr) {
     console.error("Error al guardar/actualizar el pedido:", dbErr);
@@ -382,7 +390,6 @@ ipcMain.handle("confirm-print", async (event, { filePath, orderData }) => {
   }
 });
 
-// Actualizar un pedido existente
 ipcMain.handle("update-order", async (event, orderData) => {
   if (!orderData.id) return false;
   const db = openDb();
@@ -410,7 +417,6 @@ ipcMain.handle("update-order", async (event, orderData) => {
   });
 });
 
-// --- MANEJADOR DE ELIMINACIÓN (ANULACIÓN LÓGICA) ---
 ipcMain.handle('delete-order', async (event, { orderId, motivo }) => {
     const db = openDb();
     const sql = `UPDATE pedidos SET anulado = 1, motivo_anulacion = ?, estado = 'Anulado' WHERE id = ?`;
@@ -422,18 +428,21 @@ ipcMain.handle('delete-order', async (event, { orderId, motivo }) => {
                 console.error(`Error al anular pedido #${orderId}:`, err.message);
                 resolve({ success: false, message: err.message });
             } else {
+                // --- NUEVO: AVISAR AL MÓVIL (SOCKET) ---
+                if (io) {
+                    io.emit('estado_pedido_cambiado', { id: orderId, estado: 'Anulado' });
+                }
+                // ---------------------------------------
                 resolve({ success: true });
             }
         });
     });
 });
 
-// Cancelar impresión
 ipcMain.handle("cancel-print", (event, filePath) => {
   try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (error) {}
 });
 
-// Generar reporte diario
 async function generateDailyReport(autoSavePath = null) {
   const db = openDb(true);
   const today = getLocalDate();
@@ -463,7 +472,7 @@ async function generateDailyReport(autoSavePath = null) {
           "Estado Pedido": order.estado, 
           "Estado Pago": order.estado_pago,
           "Forma de Pago": order.forma_pago || "",
-          "Anulado": order.anulado ? "SÍ" : "NO", // Columna extra para reporte
+          "Anulado": order.anulado ? "SÍ" : "NO", 
           "Motivo Anulación": order.motivo_anulacion || "",
           Producto: item.name,
           Agregados: agregadosStr,
@@ -500,7 +509,6 @@ async function generateDailyReport(autoSavePath = null) {
 
 ipcMain.handle("generate-report", () => generateDailyReport());
 
-// Guardar y enviar reporte al cerrar
 async function saveAndSendReport() {
   const today = getLocalDate();
   const desktopPath = app.getPath("desktop"); 
@@ -511,7 +519,7 @@ async function saveAndSendReport() {
   const localReportPath = path.join(reportsFolderPath, `Reporte-Piamonte-${today}.xlsx`);
   await generateDailyReport(localReportPath);
 
-  if (!process.env.EMAIL_USER) return; // Si no hay correo, no enviamos nada
+  if (!process.env.EMAIL_USER) return; 
 
   const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com", port: 465, secure: true,
@@ -528,7 +536,6 @@ async function saveAndSendReport() {
   } catch (error) { console.error("Error al enviar correo:", error); }
 }
 
-// Función para limpiar pedidos al cerrar 
 async function clearOrdersTable() {
     const db = openDb();
     const run = (sql) => new Promise((resolve, reject) => {
@@ -541,11 +548,9 @@ async function clearOrdersTable() {
     finally { db.close(); }
 }
 
-// Obtener pedidos de hoy (incluyendo columnas nuevas)
 ipcMain.handle("get-todays-orders", async () => {
   const db = openDb(true);
   const today = getLocalDate();
-  // Se seleccionan todas las columnas, incluyendo 'anulado' y 'motivo_anulacion'
   const sql = `SELECT * FROM pedidos WHERE date(fecha, 'localtime') = ? ORDER BY id DESC`;
   try {
     const orders = await new Promise((resolve, reject) => {
@@ -556,18 +561,25 @@ ipcMain.handle("get-todays-orders", async () => {
   finally { db.close(); }
 });
 
-// Actualizar estado de entrega
 ipcMain.handle("update-order-status", async (event, { orderId, status }) => {
   const db = openDb();
   return new Promise((resolve) => {
     db.run(`UPDATE pedidos SET estado = ? WHERE id = ?`, [status, orderId], function(err) {
       db.close();
-      resolve(!err && this.changes > 0);
+      const success = !err && this.changes > 0;
+      
+      // --- NUEVO: AVISAR AL MÓVIL (SOCKET) ---
+      if (success && io) {
+        console.log(`📡 Estado pedido #${orderId} cambiado a: ${status}`);
+        io.emit('estado_pedido_cambiado', { id: orderId, estado: status });
+      }
+      // ---------------------------------------
+      
+      resolve(success);
     });
   });
 });
 
-// Actualizar estado de pago
 ipcMain.handle("update-payment-status", async (event, { orderId, status, paymentMethod }) => {
   const db = openDb();
   return new Promise((resolve) => {
@@ -578,7 +590,6 @@ ipcMain.handle("update-payment-status", async (event, { orderId, status, payment
   });
 });
 
-// Actualizar precios
 ipcMain.handle("update-prices", async (event, updates) => {
   const db = openDb();
   return new Promise((resolve) => {
@@ -682,12 +693,57 @@ ipcMain.handle("confirm-print-shopping-list", async (event, filePath) => {
   finally { try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) {} }
 });
 
-// --- API SERVER ---
+// --- API SERVER Y SOCKETS ---
 function startApiServer() {
   const api = express();
   api.use(cors());
   api.use(express.json());
   const port = 3000;
+
+  // --- CONFIGURACIÓN SOCKET.IO ---
+  const server = http.createServer(api); // Envolvemos Express
+  io = new Server(server, {
+    cors: {
+      origin: "*", // Permite conexiones desde el móvil
+    }
+  });
+
+  io.on('connection', (socket) => {
+    console.log('📱 App móvil conectada, socket ID:', socket.id);
+    socket.on('disconnect', () => {
+      console.log('📱 App móvil desconectada');
+    });
+  });
+  // -------------------------------
+
+  // --- NUEVA RUTA: OBTENER PEDIDOS PENDIENTES ---
+  api.get("/api/pedidos/pendientes", (req, res) => {
+    const db = openDb(true);
+    const today = getLocalDate();
+    // Traemos pedidos de hoy que NO estén Entregados NI Anulados
+    const sql = `SELECT * FROM pedidos WHERE date(fecha, 'localtime') = ? AND estado != 'Entregado' AND anulado = 0 ORDER BY id DESC`;
+
+    db.all(sql, [today], (err, rows) => {
+      db.close();
+      if (err) return res.status(500).json({ error: err.message });
+
+      // Formatear JSON para Android
+      const pedidosFormateados = rows.map(p => {
+        let items = [];
+        try { items = JSON.parse(p.items_json); } catch(e){}
+        return {
+            id: p.id,
+            customer: { name: p.cliente_nombre, phone: p.cliente_telefono },
+            total: p.total,
+            items: items,
+            delivery: { type: p.tipo_entrega, time: p.hora_entrega },
+            timestamp: p.fecha
+        };
+      });
+      res.json(pedidosFormateados);
+    });
+  });
+  // ----------------------------------------------
 
   api.get("/ping", (req, res) => res.status(200).send("pong"));
   api.get("/api/ingredientes", (req, res) => {
@@ -725,11 +781,18 @@ function startApiServer() {
     });
   });
 
-  api.listen(port, () => {
-    console.log(`API corriendo en puerto ${port}`);
+  // --- CAMBIO: Usar server.listen en lugar de api.listen ---
+  server.listen(port, () => {
+    console.log(`API y Socket Server corriendo en puerto ${port}`);
     try {
       bonjour = new Bonjour();
-      bonjour.publish({ name: "Piamonte API Server", type: "http", port: port });
+      
+      // SOLUCIÓN ERROR "Service name is already in use": Nombre Único
+      const uniqueId = Math.floor(Math.random() * 100000);
+      const serviceName = `Piamonte_Secure_Link ${uniqueId}`;
+      console.log(`📡 Publicando servicio seguro como: ${serviceName}`);
+      
+      bonjour.publish({ name: serviceName, type: "http", port: port });
     } catch (error) { bonjour = null; }
   });
 }
@@ -765,7 +828,7 @@ ipcMain.on("close-window", () => BrowserWindow.getFocusedWindow()?.close());
 
 // --- START ---
 app.whenReady().then(async () => {
-  await ensureDatabaseSchema(); // Esperar a que termine la migración
+  await ensureDatabaseSchema(); 
   createWindow();
   startApiServer();
   app.on("activate", () => { if (!BrowserWindow.getAllWindows().length) createWindow(); });
